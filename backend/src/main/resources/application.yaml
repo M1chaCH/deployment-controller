@@ -1,0 +1,30 @@
+config:
+  sources:
+    - classpath:application.yaml
+    - classpath:db-config.yaml
+
+server:
+  port: 8181
+  host: 0.0.0.0
+
+tracing:
+  service: jdbc-db
+
+db:
+  source: jdbc
+  connection:
+    url: jdbc:postgresql://localhost:5432/deployment_controller
+    username: java
+    password: java
+    poolName: postgresql
+    initializationFailTimeout: -1
+    connectionTimeout: 2000
+  statements:
+    select-user: "select * from users where id = :id"
+    select-user-mail: "select * from users where mail = :mail"
+    select-users: "select * from users"
+    insert-user: "insert into users (mail, password, salt, admin) values (:mail, :password, :salt, :admin)"
+    update-user: "update users set mail = :mail, password = :password, admin = :admin where id = :id"
+    delete-user: "delete from users where id = :id"
+    mark-login: "update users set last_login = :last_login where id = :id"
+
