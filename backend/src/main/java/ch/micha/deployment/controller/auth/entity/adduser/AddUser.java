@@ -6,5 +6,6 @@ import io.helidon.common.Reflected;
 public record AddUser(
     String mail,
     String password,
-    boolean admin
+    boolean admin,
+    boolean viewPrivate
 ) { }

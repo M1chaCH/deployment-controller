@@ -14,20 +14,23 @@ public class AddUserMapper implements DbMapper<AddUser> {
         DbColumn mail = row.column("mail");
         DbColumn password = row.column("password");
         DbColumn admin = row.column("admin");
+        DbColumn viewPrivate = row.column("view_private");
 
         return new AddUser(
             mail.as(String.class),
             password.as(String.class),
-            admin.as(Boolean.class)
+            admin.as(Boolean.class),
+            viewPrivate.as(Boolean.class)
         );
     }
 
     @Override
     public Map<String, Object> toNamedParameters(AddUser value) {
-        Map<String, Object> map = new HashMap<>(3);
+        Map<String, Object> map = new HashMap<>(4);
         map.put("mail", value.mail());
         map.put("password", value.password());
         map.put("admin", value.admin());
+        map.put("view_private", value.viewPrivate());
         return map;
     }
 
@@ -36,7 +39,8 @@ public class AddUserMapper implements DbMapper<AddUser> {
         return List.of(
             value.mail(),
             value.password(),
-            value.admin()
+            value.admin(),
+            value.viewPrivate()
         );
     }
 }

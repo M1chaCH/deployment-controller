@@ -7,5 +7,6 @@ public record EditUser(
     int id,
     String mail,
     String password,
-    boolean admin
+    boolean admin,
+    boolean viewPrivate
 ) { }

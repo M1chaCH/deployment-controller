@@ -23,8 +23,8 @@ db:
     select-user: "select * from users where id = :id"
     select-user-mail: "select * from users where mail = :mail"
     select-users: "select * from users"
-    insert-user: "insert into users (mail, password, salt, admin) values (:mail, :password, :salt, :admin)"
-    update-user: "update users set mail = :mail, password = :password, admin = :admin where id = :id"
+    insert-user: "insert into users (mail, password, salt, admin, view_private) values (:mail, :password, :salt, :admin, :view_private)"
+    update-user: "update users set mail = :mail, password = :password, admin = :admin, view_private = :view_private where id = :id"
     delete-user: "delete from users where id = :id"
     mark-login: "update users set last_login = :last_login where id = :id"
 

@@ -51,7 +51,7 @@ public class UserResource implements Service{
 
         String salt = EncodingUtil.generateSalt();
         String hashedPassword = EncodingUtil.hashString(toAdd.password(), salt);
-        final User user = new User(-1, toAdd.mail(), hashedPassword, salt, toAdd.admin(),
+        final User user = new User(-1, toAdd.mail(), hashedPassword, salt, toAdd.admin(), toAdd.viewPrivate(),
             null, null);
 
         db.execute(exec -> exec
@@ -87,6 +87,7 @@ public class UserResource implements Service{
                 .addParam("mail", toEdit.mail())
                 .addParam("password", newHashedPassword)
                 .addParam("admin", toEdit.admin())
+                .addParam("view_private", toEdit.viewPrivate())
                 .execute())
             .thenAccept(count -> {
                 LOGGER.log(Level.INFO, "changed {0} user(s)", new Object[]{ count });

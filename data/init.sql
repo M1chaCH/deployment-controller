@@ -6,6 +6,7 @@ create table users
     password varchar(255) not null,
     salt varchar(255) not null,
     admin boolean not null default false,
+    view_private boolean not null default false,
     created_at timestamp not null default current_timestamp,
     last_login timestamp not null default current_timestamp
 );
@@ -15,7 +16,8 @@ create table pages
 (
     id          serial primary key,
     url         varchar(255) not null,
-    description varchar(255) not null
+    description varchar(255) not null,
+    private boolean not null default true
 );
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO java;

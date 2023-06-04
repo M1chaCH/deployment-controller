@@ -10,6 +10,7 @@ public record User (
     String password,
     String salt,
     boolean admin,
+    boolean viewPrivate,
     LocalDateTime createdAt,
     LocalDateTime lastLoginAt
 ) { }

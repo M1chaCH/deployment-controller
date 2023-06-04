@@ -17,6 +17,7 @@ public class UserMapper implements DbMapper<User> {
         DbColumn password = row.column("password");
         DbColumn salt = row.column("salt");
         DbColumn admin = row.column("admin");
+        DbColumn viewPrivate = row.column("view_private");
         DbColumn createdAt = row.column("created_at");
         DbColumn lastLoginAt = row.column("last_login");
 
@@ -26,6 +27,7 @@ public class UserMapper implements DbMapper<User> {
             password.as(String.class),
             salt.as(String.class),
             admin.as(Boolean.class),
+            viewPrivate.as(Boolean.class),
             createdAt.as(LocalDateTime.class),
             lastLoginAt.as(LocalDateTime.class)
         );
@@ -33,12 +35,13 @@ public class UserMapper implements DbMapper<User> {
 
     @Override
     public Map<String, Object> toNamedParameters(User value) {
-        Map<String, Object> map = new HashMap<>(7);
+        Map<String, Object> map = new HashMap<>(8);
         map.put("id", value.id());
         map.put("mail", value.mail());
         map.put("password", value.password());
         map.put("salt", value.salt());
         map.put("admin", value.admin());
+        map.put("view_private", value.viewPrivate());
         map.put("created_at", value.createdAt());
         map.put("last_login_at", value.lastLoginAt());
         return map;
@@ -52,6 +55,7 @@ public class UserMapper implements DbMapper<User> {
             value.password(),
             value.salt(),
             value.admin(),
+            value.viewPrivate(),
             value.createdAt(),
             value.lastLoginAt()
         );
