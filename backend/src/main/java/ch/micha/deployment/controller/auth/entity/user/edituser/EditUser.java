@@ -1,4 +1,4 @@
-package ch.micha.deployment.controller.auth.entity.edituser;
+package ch.micha.deployment.controller.auth.entity.user.edituser;
 
 import io.helidon.common.Reflected;
 

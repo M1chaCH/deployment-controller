@@ -16,8 +16,9 @@ create table pages
 (
     id          serial primary key,
     url         varchar(255) not null,
+    title       varchar(255) not null,
     description varchar(255) not null,
-    private boolean not null default true
+    private_access boolean not null default true
 );
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO java;

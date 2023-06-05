@@ -1,4 +1,4 @@
-package ch.micha.deployment.controller.auth.entity.adduser;
+package ch.micha.deployment.controller.auth.entity.user.adduser;
 
 import io.helidon.dbclient.DbColumn;
 import io.helidon.dbclient.DbMapper;

@@ -1,8 +1,8 @@
 package ch.micha.deployment.controller.auth.entity.user;
 
-import ch.micha.deployment.controller.auth.entity.adduser.AddUser;
-import ch.micha.deployment.controller.auth.entity.adduser.AddUserMapper;
-import ch.micha.deployment.controller.auth.entity.edituser.EditUserMapper;
+import ch.micha.deployment.controller.auth.entity.user.adduser.AddUser;
+import ch.micha.deployment.controller.auth.entity.user.adduser.AddUserMapper;
+import ch.micha.deployment.controller.auth.entity.user.edituser.EditUserMapper;
 import io.helidon.dbclient.DbMapper;
 import io.helidon.dbclient.spi.DbMapperProvider;
 import jakarta.annotation.Priority;

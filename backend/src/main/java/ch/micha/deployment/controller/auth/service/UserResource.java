@@ -1,8 +1,8 @@
 package ch.micha.deployment.controller.auth.service;
 
 import ch.micha.deployment.controller.auth.EncodingUtil;
-import ch.micha.deployment.controller.auth.entity.adduser.AddUser;
-import ch.micha.deployment.controller.auth.entity.edituser.EditUser;
+import ch.micha.deployment.controller.auth.entity.user.adduser.AddUser;
+import ch.micha.deployment.controller.auth.entity.user.edituser.EditUser;
 import ch.micha.deployment.controller.auth.entity.user.User;
 import io.helidon.common.http.Http;
 import io.helidon.common.http.Http.Status;

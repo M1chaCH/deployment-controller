@@ -1,6 +1,7 @@
 package ch.micha.deployment.controller.auth;
 
 import ch.micha.deployment.controller.auth.service.AuthService;
+import ch.micha.deployment.controller.auth.service.PageResource;
 import ch.micha.deployment.controller.auth.service.UserResource;
 import io.helidon.common.LogConfig;
 import io.helidon.common.reactive.Single;
@@ -38,7 +39,6 @@ public final class Main {
 
         WebServer server = WebServer.builder(createRouting(config))
             .config(config.get("server"))
-//            .tracer(TracerBuilder.create(config.get("tracing")))
             .addMediaSupport(JsonpSupport.create())
             .addMediaSupport(JsonbSupport.create())
             .build();
@@ -65,11 +65,13 @@ public final class Main {
 
         AuthService authService = new AuthService(dbClient);
         UserResource userResource = new UserResource(dbClient);
+        PageResource pageResource = new PageResource(dbClient);
 
         Routing.Builder builder = Routing.builder()
             .register(OpenAPISupport.create(config))
             .register("/auth", authService)
-            .register("/user", userResource);
+            .register("/users", userResource)
+            .register("/pages", pageResource);
 
         return builder.build();
     }
