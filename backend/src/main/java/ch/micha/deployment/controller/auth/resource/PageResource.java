@@ -1,4 +1,4 @@
-package ch.micha.deployment.controller.auth.service;
+package ch.micha.deployment.controller.auth.resource;
 
 import ch.micha.deployment.controller.auth.entity.page.Page;
 import ch.micha.deployment.controller.auth.entity.page.addpage.AddPage;

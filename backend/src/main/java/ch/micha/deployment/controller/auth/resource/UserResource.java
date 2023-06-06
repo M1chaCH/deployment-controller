@@ -1,4 +1,4 @@
-package ch.micha.deployment.controller.auth.service;
+package ch.micha.deployment.controller.auth.resource;
 
 import ch.micha.deployment.controller.auth.EncodingUtil;
 import ch.micha.deployment.controller.auth.entity.user.adduser.AddUser;

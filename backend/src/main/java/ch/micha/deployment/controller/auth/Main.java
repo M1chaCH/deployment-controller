@@ -1,8 +1,9 @@
 package ch.micha.deployment.controller.auth;
 
-import ch.micha.deployment.controller.auth.service.AuthService;
-import ch.micha.deployment.controller.auth.service.PageResource;
-import ch.micha.deployment.controller.auth.service.UserResource;
+import ch.micha.deployment.controller.auth.auth.AuthHandler;
+import ch.micha.deployment.controller.auth.auth.AuthService;
+import ch.micha.deployment.controller.auth.resource.PageResource;
+import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
 import io.helidon.common.reactive.Single;
 import io.helidon.config.Config;
@@ -63,14 +64,18 @@ public final class Main {
         Config dbConfig = config.get("db");
         DbClient dbClient = DbClient.builder(dbConfig).build();
 
-        AuthService authService = new AuthService(dbClient);
+        Config securityConfig = config.get("app.security");
+        AuthService authService = new AuthService(dbClient, securityConfig);
+        AuthHandler authHandler = new AuthHandler(authService);
         UserResource userResource = new UserResource(dbClient);
         PageResource pageResource = new PageResource(dbClient);
 
         Routing.Builder builder = Routing.builder()
             .register(OpenAPISupport.create(config))
-            .register("/auth", authService)
+            .register("/security", authService)
+            .any("/users", authHandler)
             .register("/users", userResource)
+            .any("/pages", authHandler)
             .register("/pages", pageResource);
 
         return builder.build();

@@ -1,14 +1,14 @@
-config:
-  sources:
-    - classpath:application.yaml
-    - classpath:db-config.yaml
-
 server:
   port: 8181
   host: 0.0.0.0
 
-tracing:
-  service: jdbc-db
+app:
+  security:
+    key: c29tZS1rZXk=
+    tokenExpireHours: 168
+    default:
+      mail: admin@test.com
+      password: admin
 
 db:
   source: jdbc
