@@ -18,7 +18,7 @@ public class AuthHandler implements Handler {
 
     @Override
     public void accept(ServerRequest request, ServerResponse response) {
-        SecurityToken token = service.extractTokenCookie(request.headers(), response);
+        SecurityToken token = service.extractTokenCookie(request.headers());
         if(token == null)
             return; // extract token responds with an error -> we don't have to do anything here
 

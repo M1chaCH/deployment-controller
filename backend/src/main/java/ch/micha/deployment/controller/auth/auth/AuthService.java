@@ -33,7 +33,7 @@ import javax.crypto.spec.SecretKeySpec;
 public class AuthService implements Service {
     private static final Logger LOGGER = Logger.getLogger(AuthService.class.getSimpleName());
     private static final SignatureAlgorithm SIGNATURE_ALGORITHM = SignatureAlgorithm.HS512;
-    private static final String AUTH_REQUEST_PAGE_QUERY = "page";
+    private static final String AUTH_REQUEST_PAGE_PARAM = "page";
     private static final String BEARER_COOKIE = "Bearer";
 
     private final DbClient db;
@@ -55,7 +55,7 @@ public class AuthService implements Service {
     public void update(Rules rules) {
         rules
             .post("/login", Handler.create(Credential.class, this::login))
-            .post("/auth", this::validateTokenCookie);
+            .get("/auth/{" + AUTH_REQUEST_PAGE_PARAM + "}", this::validateTokenCookie);
     }
 
     public void login(ServerRequest request, ServerResponse response, Credential credential) {
@@ -85,14 +85,22 @@ public class AuthService implements Service {
     }
 
     public void validateTokenCookie(ServerRequest request, ServerResponse response) {
-        Optional<String> pageIdQuery = request.queryParams().first(AUTH_REQUEST_PAGE_QUERY);
+        String pageIdParam = request.path().param(AUTH_REQUEST_PAGE_PARAM);
 
-        if(pageIdQuery.isEmpty())
+        if(pageIdParam == null || pageIdParam.isEmpty() || pageIdParam.isBlank())
             throw new BadRequestException(String.format("missing page param at auth request, from ip: %s",
                 request.remoteAddress()), "missing parameter");
 
-        LOGGER.log(Level.INFO, "validating token for request to page {0}", new Object[]{ pageIdQuery.get() });
-        int pageId = Integer.parseInt(pageIdQuery.get());
+        LOGGER.log(Level.INFO, "validating token for request to page {0}", new Object[]{ pageIdParam });
+
+        int pageId;
+        try {
+            pageId = Integer.parseInt(pageIdParam);
+        } catch (NumberFormatException e) {
+            throw new BadRequestException(String.format("invalid page param (%s) at auth request, from ip: %s",
+                pageIdParam, request.remoteAddress()), "invalid parameter");
+        }
+
         DbRow pageRow = db.execute(exec -> exec
                 .createNamedQuery("select-page")
                 .addParam("id", pageId)
@@ -113,7 +121,7 @@ public class AuthService implements Service {
             return;
         }
 
-        SecurityToken token = extractTokenCookie(request.headers(), response);
+        SecurityToken token = extractTokenCookie(request.headers());
         validateSecurityToken(request, token);
         if(token.isPrivateAccess()) {
             LOGGER.log(Level.INFO, "access to private page {0} granted for {1}",
@@ -151,20 +159,19 @@ public class AuthService implements Service {
         return securityToken;
     }
 
-    public SecurityToken extractTokenCookie(RequestHeaders headers, ServerResponse response) {
+    public SecurityToken extractTokenCookie(RequestHeaders headers) {
         Optional<String> tokenCookie = headers.cookies().first(BEARER_COOKIE);
 
-        if(tokenCookie.isEmpty()) {
-            LOGGER.log(Level.INFO, "got admin request with no auth cookie");
-            response.status(Status.UNAUTHORIZED_401);
-            response.send("Unauthorized request");
-            return null;
-        }
+        if(tokenCookie.isEmpty())
+            throw new UnauthorizedException("got admin request with no auth cookie", "unauthorized request");
 
         return parseJwt(tokenCookie.get());
     }
 
     public void validateSecurityToken(ServerRequest request, SecurityToken token) {
+        if(token == null)
+            throw new UnauthorizedException(String.format("got request from %s, with no token provided",
+                request.remoteAddress()), "unauthorized");
         // handle client change (token rubbery dude)
         if(!token.getIssuer().equals(request.remoteAddress())) {
             throw new UnauthorizedException(String.format("invalid issuer in request: %s changed to %s, associated user: %s",
