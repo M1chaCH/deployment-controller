@@ -39,10 +39,6 @@
             <artifactId>helidon-webserver-cors</artifactId>
         </dependency>
         <dependency>
-            <groupId>io.helidon.openapi</groupId>
-            <artifactId>helidon-openapi</artifactId>
-        </dependency>
-        <dependency>
             <groupId>io.helidon.dbclient</groupId>
             <artifactId>helidon-dbclient</artifactId>
         </dependency>

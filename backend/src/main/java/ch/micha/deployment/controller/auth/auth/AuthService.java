@@ -4,6 +4,9 @@ import ch.micha.deployment.controller.auth.EncodingUtil;
 import ch.micha.deployment.controller.auth.entity.credentials.Credential;
 import ch.micha.deployment.controller.auth.entity.page.Page;
 import ch.micha.deployment.controller.auth.entity.user.User;
+import ch.micha.deployment.controller.auth.error.BadRequestException;
+import ch.micha.deployment.controller.auth.error.ForbiddenException;
+import ch.micha.deployment.controller.auth.error.UnauthorizedException;
 import io.helidon.common.http.Http.Status;
 import io.helidon.config.Config;
 import io.helidon.dbclient.DbClient;
@@ -59,12 +62,8 @@ public class AuthService implements Service {
         LOGGER.log(Level.INFO, "trying login for {0}", credential.mail());
 
         User user = selectUserByMail(credential.mail());
-        if(user == null) {
-            LOGGER.log(Level.WARNING, "login denied for {0}", new Object[]{ credential.mail() });
-            response.status(Status.FORBIDDEN_403);
-            response.send("invalid credentials");
-            return;
-        }
+        if(user == null)
+            throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
 
         String hashedPassword = EncodingUtil.hashString(credential.password(), user.salt());
         if(hashedPassword.equals(user.password())) {
@@ -81,23 +80,16 @@ public class AuthService implements Service {
             response.status(Status.NO_CONTENT_204);
             response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true;", BEARER_COOKIE, token));
             response.send();
-        } else {
-            LOGGER.log(Level.WARNING, "login denied for {0}", new Object[]{ credential.mail() });
-            response.status(Status.FORBIDDEN_403);
-            response.send("invalid credentials");
-        }
+        } else
+            throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
     }
 
     public void validateTokenCookie(ServerRequest request, ServerResponse response) {
         Optional<String> pageIdQuery = request.queryParams().first(AUTH_REQUEST_PAGE_QUERY);
 
-        if(pageIdQuery.isEmpty()) {
-            LOGGER.log(Level.INFO, "missing param at auth request, from ip: {0}",
-                new Object[]{ request.remoteAddress() });
-            response.status(Status.BAD_REQUEST_400);
-            response.send("missing parameter");
-            return;
-        }
+        if(pageIdQuery.isEmpty())
+            throw new BadRequestException(String.format("missing page param at auth request, from ip: %s",
+                request.remoteAddress()), "missing parameter");
 
         LOGGER.log(Level.INFO, "validating token for request to page {0}", new Object[]{ pageIdQuery.get() });
         int pageId = Integer.parseInt(pageIdQuery.get());
@@ -108,13 +100,9 @@ public class AuthService implements Service {
             ).first()
             .await();
 
-        if(pageRow == null) {
-            LOGGER.log(Level.INFO, "access to unknown page denied, from: {0}",
-                new Object[]{ request.remoteAddress() });
-            response.status(Status.FORBIDDEN_403);
-            response.send("not allowed");
-            return;
-        }
+        if(pageRow == null)
+            throw new ForbiddenException(String.format("access to unknown page denied, from: %s",
+                request.remoteAddress()), "not allowed");
 
         Page page = pageRow.as(Page.class);
         if(!page.privateAccess()) {
@@ -126,18 +114,15 @@ public class AuthService implements Service {
         }
 
         SecurityToken token = extractTokenCookie(request.headers(), response);
-        validateSecurityToken(request, token, response);
+        validateSecurityToken(request, token);
         if(token.isPrivateAccess()) {
             LOGGER.log(Level.INFO, "access to private page {0} granted for {1}",
                 new Object[]{ page.url(), token.getUserMail() });
             response.status(Status.OK_200);
             response.send("enjoy!");
-        } else {
-            LOGGER.log(Level.WARNING, "access to private page {0} refused for {1}",
-                new Object[]{ page.url(), token.getUserMail() });
-            response.status(Status.FORBIDDEN_403);
-            response.send("not allowed");
-        }
+        } else
+            throw new ForbiddenException(String.format("access to private page %s refused for %s",
+                page.url(), token.getUserMail()), "not allowed");
     }
 
     public String createJwt(SecurityToken securityToken) {
@@ -179,19 +164,15 @@ public class AuthService implements Service {
         return parseJwt(tokenCookie.get());
     }
 
-    public void validateSecurityToken(ServerRequest request, SecurityToken token, ServerResponse response) {
+    public void validateSecurityToken(ServerRequest request, SecurityToken token) {
         // handle client change (token rubbery dude)
         if(!token.getIssuer().equals(request.remoteAddress())) {
-            LOGGER.log(Level.WARNING, "invalid issuer in request: {0} changed to {1}, associated user: {2}",
-                new Object[]{ token.getIssuer(), request.remoteAddress(), token.getUserMail() });
-            response.status(Status.UNAUTHORIZED_401);
-            response.send("Unauthorized request");
-            // handle token expired
+            throw new UnauthorizedException(String.format("invalid issuer in request: %s changed to %s, associated user: %s",
+                token.getIssuer(), request.remoteAddress(), token.getUserMail()), "unauthorized request");
+        // handle token expired
         } else if(token.getExpiresAt().before(Date.from(Instant.now()))) {
-            LOGGER.log(Level.WARNING, "token for {0} expired",
-                new Object[]{ token.getUserMail() });
-            response.status(Status.UNAUTHORIZED_401);
-            response.send("token expired");
+            throw new UnauthorizedException(String.format("token for %s expired",
+                token.getUserMail()), "token expired");
         }
     }
 

@@ -2,6 +2,7 @@ package ch.micha.deployment.controller.auth.resource;
 
 import ch.micha.deployment.controller.auth.entity.page.Page;
 import ch.micha.deployment.controller.auth.entity.page.addpage.AddPage;
+import ch.micha.deployment.controller.auth.error.AppRequestException;
 import io.helidon.common.http.Http.Status;
 import io.helidon.dbclient.DbClient;
 import io.helidon.webserver.Handler;
@@ -10,10 +11,8 @@ import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
 import jakarta.json.JsonObject;
-import java.util.concurrent.CompletionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.postgresql.util.PSQLException;
 
 public class PageResource implements Service{
     private static final Logger LOGGER = Logger.getLogger(PageResource.class.getSimpleName());
@@ -52,7 +51,7 @@ public class PageResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(throwable -> sendError(throwable, response));
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 
     private void editPage(ServerRequest request, ServerResponse response, Page toEdit) {
@@ -67,7 +66,7 @@ public class PageResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> sendError(t, response));
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 
     private void deletePage(ServerRequest request, ServerResponse response) {
@@ -84,28 +83,6 @@ public class PageResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> sendError(t, response));
-    }
-
-    @SuppressWarnings({"java:S3516", "SameReturnValue"})
-    private <T> T sendError(Throwable throwable, ServerResponse response) {
-        Throwable realCause = throwable;
-        if (throwable instanceof CompletionException)
-            realCause = throwable.getCause();
-
-        if(realCause instanceof PSQLException psqlException &&
-            psqlException.getMessage().contains("value violates unique constraint")) {
-
-            LOGGER.log(Level.INFO, "unique constraint was violated: {0}", psqlException.getServerErrorMessage());
-            response.status(Status.BAD_REQUEST_400);
-            response.send("value already exists: " + psqlException.getServerErrorMessage());
-            return null;
-        }
-
-        LOGGER.log(Level.WARNING, "caught error", realCause);
-        response.status(Status.INTERNAL_SERVER_ERROR_500);
-        response.send("Failed to process request: " + realCause.getClass().getName() +
-            "(" + realCause.getMessage() + ")");
-        return null;
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 }

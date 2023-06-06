@@ -2,6 +2,7 @@ package ch.micha.deployment.controller.auth;
 
 import ch.micha.deployment.controller.auth.auth.AuthHandler;
 import ch.micha.deployment.controller.auth.auth.AuthService;
+import ch.micha.deployment.controller.auth.error.AppRequestException;
 import ch.micha.deployment.controller.auth.resource.PageResource;
 import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
@@ -10,7 +11,6 @@ import io.helidon.config.Config;
 import io.helidon.dbclient.DbClient;
 import io.helidon.media.jsonb.JsonbSupport;
 import io.helidon.media.jsonp.JsonpSupport;
-import io.helidon.openapi.OpenAPISupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.WebServer;
 import java.util.logging.Level;
@@ -67,16 +67,14 @@ public final class Main {
         Config securityConfig = config.get("app.security");
         AuthService authService = new AuthService(dbClient, securityConfig);
         AuthHandler authHandler = new AuthHandler(authService);
-        UserResource userResource = new UserResource(dbClient);
-        PageResource pageResource = new PageResource(dbClient);
 
         Routing.Builder builder = Routing.builder()
-            .register(OpenAPISupport.create(config))
+            .error(AppRequestException.class, (req, res, ex) -> ex.sendResponse(res))
             .register("/security", authService)
             .any("/users", authHandler)
-            .register("/users", userResource)
             .any("/pages", authHandler)
-            .register("/pages", pageResource);
+            .register("/users", new UserResource(dbClient))
+            .register("/pages", new PageResource(dbClient));
 
         return builder.build();
     }

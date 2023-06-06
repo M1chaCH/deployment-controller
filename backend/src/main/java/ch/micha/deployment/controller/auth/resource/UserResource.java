@@ -4,7 +4,8 @@ import ch.micha.deployment.controller.auth.EncodingUtil;
 import ch.micha.deployment.controller.auth.entity.user.adduser.AddUser;
 import ch.micha.deployment.controller.auth.entity.user.edituser.EditUser;
 import ch.micha.deployment.controller.auth.entity.user.User;
-import io.helidon.common.http.Http;
+import ch.micha.deployment.controller.auth.error.AppRequestException;
+import ch.micha.deployment.controller.auth.error.NotFoundException;
 import io.helidon.common.http.Http.Status;
 import io.helidon.dbclient.DbClient;
 import io.helidon.dbclient.DbRow;
@@ -15,10 +16,8 @@ import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
 import jakarta.json.JsonObject;
 import java.util.Optional;
-import java.util.concurrent.CompletionException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
-import org.postgresql.util.PSQLException;
 
 public class UserResource implements Service{
     private static final Logger LOGGER = Logger.getLogger(UserResource.class.getSimpleName());
@@ -63,7 +62,7 @@ public class UserResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(throwable -> sendError(throwable, response));
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 
     private void editUser(ServerRequest request, ServerResponse response, EditUser toEdit) {
@@ -74,10 +73,8 @@ public class UserResource implements Service{
             .addParam("id", toEdit.id())
             .execute()).await();
 
-        if(userRow.isEmpty()) {
-            sendNotFound(response, String.valueOf(toEdit.id()));
-            return;
-        }
+        if(userRow.isEmpty())
+            throw new NotFoundException("could not find user with id " + toEdit.id(), "not found");
 
         User user = userRow.get().as(User.class);
         String newHashedPassword = EncodingUtil.hashString(toEdit.password(), user.salt());
@@ -94,7 +91,7 @@ public class UserResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> sendError(t, response));
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 
     private void deleteUser(ServerRequest request, ServerResponse response) {
@@ -111,33 +108,6 @@ public class UserResource implements Service{
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> sendError(t, response));
-    }
-
-    private void sendNotFound(ServerResponse response, String id) {
-        response.status(Status.NOT_FOUND_404);
-        response.send(String.format("Could not find user by %s", id));
-    }
-
-    @SuppressWarnings({"java:S3516", "SameReturnValue"})
-    private <T> T sendError(Throwable throwable, ServerResponse response) {
-        Throwable realCause = throwable;
-        if (throwable instanceof CompletionException)
-            realCause = throwable.getCause();
-
-        if(realCause instanceof PSQLException psqlException &&
-            psqlException.getMessage().contains("value violates unique constraint")) {
-
-            LOGGER.log(Level.INFO, "unique constraint was violated: {0}", psqlException.getServerErrorMessage());
-            response.status(Status.BAD_REQUEST_400);
-            response.send("value already exists: " + psqlException.getServerErrorMessage());
-            return null;
-        }
-
-        LOGGER.log(Level.WARNING, "caught error", realCause);
-        response.status(Http.Status.INTERNAL_SERVER_ERROR_500);
-        response.send("Failed to process request: " + realCause.getClass().getName() +
-            "(" + realCause.getMessage() + ")");
-        return null;
+            .exceptionally(t -> AppRequestException.respondFitting(response, t));
     }
 }

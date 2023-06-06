@@ -22,7 +22,7 @@ public class AuthHandler implements Handler {
         if(token == null)
             return; // extract token responds with an error -> we don't have to do anything here
 
-        service.validateSecurityToken(request, token, response);
+        service.validateSecurityToken(request, token);
         if(!token.isAdmin()) {
             LOGGER.log(Level.WARNING, "{0} tried to access admin",
                 new Object[]{ token.getUserMail() });
