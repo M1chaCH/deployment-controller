@@ -209,7 +209,6 @@ public class AuthService implements Service {
         String defaultPassword = defaultConfig.get("password").as(String.class).get();
 
         createDefaultAdmin(defaultMail, defaultPassword);
-        createDefaultPage();
     }
 
     private void createDefaultAdmin(String defaultMail, String defaultPassword) {
@@ -233,27 +232,6 @@ public class AuthService implements Service {
                 .thenAccept(count -> LOGGER.log(Level.INFO, "created default user"))
                 .exceptionally(t -> {
                     LOGGER.log(Level.SEVERE, "failed to create default user", t);
-                    return null;
-                });
-        }
-    }
-
-    private void createDefaultPage() {
-        LOGGER.log(Level.INFO, "checking if default page exists: route:/ - id:0");
-
-        Page existingDefaultUser = selectPageById(1);
-        if(existingDefaultUser == null) {
-            LOGGER.log(Level.INFO, "default page not found -> creating one");
-            Page defaultPage = new Page(1, "/", "Overview",
-                "This is the root, overview page", false);
-
-            db.execute(exec -> exec
-                    .createNamedInsert("insert-page")
-                    .namedParam(defaultPage)
-                    .execute())
-                .thenAccept(c -> LOGGER.log(Level.INFO, "created default page"))
-                .exceptionally(t -> {
-                    LOGGER.log(Level.SEVERE, "failed to create default page", t);
                     return null;
                 });
         }

@@ -29,7 +29,7 @@ db:
     update-user: "update users set mail = :mail, password = :password, admin = :admin, view_private = :view_private where id = :id"
     delete-user: "delete from users where id = :id"
     select-page: "select * from pages where id = :id"
-    select-pages: "select * from pages"
+    select-pages: "select * from pages order by private_access asc, title"
     insert-page: "insert into pages (url, title, description, private_access) values (:url, :title, :description, :private_access)"
     update-page: "update pages set url = :url, title = :title, description = :description, private_access = :private_access where id = :id"
     delete-page: "delete from pages where id = :id"
