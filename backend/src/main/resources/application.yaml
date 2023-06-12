@@ -4,6 +4,8 @@ server:
 
 app:
   security:
+    frontend: "http://localhost:8080"
+    domain: "localhost"
     key: c29tZS1rZXk=
     tokenExpireHours: 168
     default:

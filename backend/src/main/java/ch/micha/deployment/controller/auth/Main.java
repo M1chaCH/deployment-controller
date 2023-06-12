@@ -13,6 +13,8 @@ import io.helidon.media.jsonb.JsonbSupport;
 import io.helidon.media.jsonp.JsonpSupport;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.WebServer;
+import io.helidon.webserver.cors.CorsSupport;
+import io.helidon.webserver.cors.CrossOriginConfig;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -61,15 +63,27 @@ public final class Main {
      * @return routing configured with JSON support, a health check, and a service
      */
     private static Routing createRouting(Config config) {
+        Config securityConfig = config.get("app.security");
+
+        String clientUrl = securityConfig.get("frontend").asString().get();
+        final CorsSupport corsSupport = CorsSupport.builder()
+            .addCrossOrigin(CrossOriginConfig.builder()
+                .pathPattern("*")
+                .allowOrigins(clientUrl)
+                .allowCredentials(true)
+                .allowMethods("GET", "PUT", "POST", "DELETE", "OPTIONS")
+                .build())
+            .build();
+
         Config dbConfig = config.get("db");
         DbClient dbClient = DbClient.builder(dbConfig).build();
 
-        Config securityConfig = config.get("app.security");
         AuthService authService = new AuthService(dbClient, securityConfig);
         AuthHandler authHandler = new AuthHandler(authService);
 
         Routing.Builder builder = Routing.builder()
             .error(AppRequestException.class, (req, res, ex) -> ex.sendResponse(res))
+            .any(corsSupport)
             .register("/security", authService)
             .any("/users", authHandler)
             .any("/pages", authHandler)

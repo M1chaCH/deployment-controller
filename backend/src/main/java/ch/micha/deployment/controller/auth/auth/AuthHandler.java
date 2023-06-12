@@ -1,5 +1,6 @@
 package ch.micha.deployment.controller.auth.auth;
 
+import io.helidon.common.http.Http.Method;
 import io.helidon.common.http.Http.Status;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.ServerRequest;
@@ -18,6 +19,12 @@ public class AuthHandler implements Handler {
 
     @Override
     public void accept(ServerRequest request, ServerResponse response) {
+        if(request.method().equals(Method.GET) && request.requestedUri().path().equals("/pages")) {
+            LOGGER.log(Level.INFO, "GET request to /pages -> ignoring auth");
+            request.next();
+            return;
+        }
+
         SecurityToken token = service.extractTokenCookie(request.headers());
         if(token == null)
             return; // extract token responds with an error -> we don't have to do anything here

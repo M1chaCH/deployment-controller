@@ -20,6 +20,8 @@ import io.helidon.webserver.Service;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
+import jakarta.json.Json;
+import jakarta.json.JsonObjectBuilder;
 import java.security.Key;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -37,25 +39,28 @@ public class AuthService implements Service {
     private static final String BEARER_COOKIE = "Bearer";
 
     private final DbClient db;
+    private final Config securityConfig;
     private final Key key;
     private final long tokenExpireHours;
 
     public AuthService(DbClient db, Config config) {
         this.db = db;
+        this.securityConfig = config;
 
         String keyConfig = config.get("key").asString().get();
         key = new SecretKeySpec(Base64.getDecoder().decode(keyConfig), SIGNATURE_ALGORITHM.getJcaName());
 
         tokenExpireHours = config.get("tokenExpireHours").asLong().get();
 
-        createDefaultAdmin(config.get("default"));
+        createDefaults(config.get("default"));
     }
 
     @Override
     public void update(Rules rules) {
         rules
             .post("/login", Handler.create(Credential.class, this::login))
-            .get("/auth/{" + AUTH_REQUEST_PAGE_PARAM + "}", this::validateTokenCookie);
+            .get("/auth/{" + AUTH_REQUEST_PAGE_PARAM + "}", this::validateTokenCookie)
+            .get("/auth", this::isLoggedIn);
     }
 
     public void login(ServerRequest request, ServerResponse response, Credential credential) {
@@ -77,8 +82,13 @@ public class AuthService implements Service {
                 user.viewPrivate(),
                 Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS))
             ));
+
+            String domain = securityConfig.get("domain").asString().get();
+
             response.status(Status.NO_CONTENT_204);
-            response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true;", BEARER_COOKIE, token));
+            response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true; "
+                + "SameSite=Strict; Secure=true; Domain=%s;",
+                BEARER_COOKIE, token, domain));
             response.send();
         } else
             throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
@@ -101,18 +111,11 @@ public class AuthService implements Service {
                 pageIdParam, request.remoteAddress()), "invalid parameter");
         }
 
-        DbRow pageRow = db.execute(exec -> exec
-                .createNamedQuery("select-page")
-                .addParam("id", pageId)
-                .execute()
-            ).first()
-            .await();
-
-        if(pageRow == null)
+        Page page = selectPageById(pageId);
+        if(page == null)
             throw new ForbiddenException(String.format("access to unknown page denied, from: %s",
                 request.remoteAddress()), "not allowed");
 
-        Page page = pageRow.as(Page.class);
         if(!page.privateAccess()) {
             LOGGER.log(Level.INFO, "access to public page granted: {0}",
                 new Object[]{ page.url() });
@@ -131,6 +134,24 @@ public class AuthService implements Service {
         } else
             throw new ForbiddenException(String.format("access to private page %s refused for %s",
                 page.url(), token.getUserMail()), "not allowed");
+    }
+
+    public void isLoggedIn(ServerRequest request, ServerResponse response) {
+        SecurityToken token = extractTokenCookie(request.headers());
+        User user = selectUserByMail(token.getUserMail());
+
+        if(user == null) {
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+            return;
+        }
+
+        JsonObjectBuilder jsonUserBuilder = Json.createObjectBuilder();
+        jsonUserBuilder.add("mail", user.mail());
+        jsonUserBuilder.add("admin", user.admin());
+        jsonUserBuilder.add("viewPrivate", user.viewPrivate());
+
+        response.send(jsonUserBuilder.build());
     }
 
     public String createJwt(SecurityToken securityToken) {
@@ -176,16 +197,22 @@ public class AuthService implements Service {
         if(!token.getIssuer().equals(request.remoteAddress())) {
             throw new UnauthorizedException(String.format("invalid issuer in request: %s changed to %s, associated user: %s",
                 token.getIssuer(), request.remoteAddress(), token.getUserMail()), "unauthorized request");
-        // handle token expired
+            // handle token expired
         } else if(token.getExpiresAt().before(Date.from(Instant.now()))) {
             throw new UnauthorizedException(String.format("token for %s expired",
                 token.getUserMail()), "token expired");
         }
     }
 
-    private void createDefaultAdmin(Config defaultConfig) {
+    private void createDefaults(Config defaultConfig) {
         String defaultMail = defaultConfig.get("mail").as(String.class).get();
         String defaultPassword = defaultConfig.get("password").as(String.class).get();
+
+        createDefaultAdmin(defaultMail, defaultPassword);
+        createDefaultPage();
+    }
+
+    private void createDefaultAdmin(String defaultMail, String defaultPassword) {
         LOGGER.log(Level.INFO, "checking if default user with mail {0} exists", defaultMail);
 
         User existingDefaultUser = selectUserByMail(defaultMail);
@@ -211,6 +238,27 @@ public class AuthService implements Service {
         }
     }
 
+    private void createDefaultPage() {
+        LOGGER.log(Level.INFO, "checking if default page exists: route:/ - id:0");
+
+        Page existingDefaultUser = selectPageById(1);
+        if(existingDefaultUser == null) {
+            LOGGER.log(Level.INFO, "default page not found -> creating one");
+            Page defaultPage = new Page(1, "/", "Overview",
+                "This is the root, overview page", false);
+
+            db.execute(exec -> exec
+                    .createNamedInsert("insert-page")
+                    .namedParam(defaultPage)
+                    .execute())
+                .thenAccept(c -> LOGGER.log(Level.INFO, "created default page"))
+                .exceptionally(t -> {
+                    LOGGER.log(Level.SEVERE, "failed to create default page", t);
+                    return null;
+                });
+        }
+    }
+
     private User selectUserByMail(String mail) {
         DbRow row = db.execute(exec -> exec
                 .createNamedQuery("select-user-mail")
@@ -221,5 +269,17 @@ public class AuthService implements Service {
         if(row == null)
             return null;
         return row.as(User.class);
+    }
+
+    private Page selectPageById(int id) {
+        DbRow row = db.execute(exec -> exec
+                .createNamedQuery("select-page")
+                .addParam("id", id)
+                .execute()
+            ).first()
+            .await();
+        if(row == null)
+            return null;
+        return row.as(Page.class);
     }
 }

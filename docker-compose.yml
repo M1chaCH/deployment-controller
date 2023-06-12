@@ -29,6 +29,8 @@ services:
       - DB_CONNECTION_URL=jdbc:postgresql://controller-db:5432/deployment_controller
       - DB_CONNECTION_USERNAME=java
       - DB_CONNECTION_PASSWORD=java
+      - APP_SECURITY_DOMAIN=localhost
+      - APP_SECURITY_FRONTEND=http://localhost
       - APP_SECURITY_KEY=c29tZS1rZXk=
       - APP_SECURITY_TOKEN_EXPIRE_HOURS=168
       - APP_SECURITY_DEFAULT_MAIL=root@test.com
@@ -41,7 +43,9 @@ services:
 
   controller-proxy:
     container_name: controller-proxy
-    image: nginx:stable
+    build:
+      context: ./proxy
+      dockerfile: Dockerfile
     ports:
       - "80:80"
       - "443:443"
@@ -50,13 +54,6 @@ services:
     tty: true
     networks:
       - net-controller-public
-    volumes:
-      - ./proxy/nginx.conf:/etc/nginx/nginx.conf
-      - ./proxy/mime.types:/etc/nginx/mime.types
-      - ./proxy/test-automation.html:/pages/automation/index.html
-      - ./proxy/test-portfolio.html:/pages/portfolio/index.html
-      - ./proxy/test-overview.html:/pages/overview/index.html
-      - ./proxy/test-login.html:/pages/login/index.html
 
 networks:
   net-controller-backend:
