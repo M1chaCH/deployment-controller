@@ -1,0 +1,35 @@
+/* colors: https://coolors.co/0D181C-264653-2a9d8f-e9c46a-f4a261-e76f51 */
+
+* {
+  font-family: "Inter", sans-serif;
+  color: #0D181C;
+}
+
+::selection {
+  color: #2A9D8F;
+  background: #264653;
+}
+
+html {
+  background-color: #E76F51;
+  min-height: 100svh;
+}
+
+body {
+  padding: 8vw;
+}
+
+h1 {
+  font-size: 35px;
+}
+
+.text {
+  font-weight: 300;
+  font-size: 18px;
+}
+
+.small-text {
+  font-weight: 100;
+  font-style: italic;
+  font-size: 14px;
+}
