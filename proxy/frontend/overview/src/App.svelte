@@ -12,7 +12,11 @@
 
 	async function getPages() {
 		const response = await fetch(`${apiUrl}/pages`);
-		return await response.json();
+
+		const stringResponse = await response.text();
+		if(stringResponse.startsWith("]"))
+			return [];
+		return JSON.parse(stringResponse);
 	}
 
 	async function isLoggedIn() {

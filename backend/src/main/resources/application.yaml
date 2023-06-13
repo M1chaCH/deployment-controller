@@ -30,7 +30,7 @@ db:
     delete-user: "delete from users where id = :id"
     select-page: "select * from pages where id = :id"
     select-pages: "select * from pages order by private_access asc, title"
-    insert-page: "insert into pages (url, title, description, private_access) values (:url, :title, :description, :private_access)"
+    insert-page: "insert into pages (id, url, title, description, private_access) values (:id, :url, :title, :description, :private_access)"
     update-page: "update pages set url = :url, title = :title, description = :description, private_access = :private_access where id = :id"
     delete-page: "delete from pages where id = :id"
     mark-login: "update users set last_login = :last_login where id = :id"

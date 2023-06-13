@@ -103,15 +103,7 @@ public class AuthService implements Service {
 
         LOGGER.log(Level.INFO, "validating token for request to page {0}", new Object[]{ pageIdParam });
 
-        int pageId;
-        try {
-            pageId = Integer.parseInt(pageIdParam);
-        } catch (NumberFormatException e) {
-            throw new BadRequestException(String.format("invalid page param (%s) at auth request, from ip: %s",
-                pageIdParam, request.remoteAddress()), "invalid parameter");
-        }
-
-        Page page = selectPageById(pageId);
+        Page page = selectPageById(pageIdParam);
         if(page == null)
             throw new ForbiddenException(String.format("access to unknown page denied, from: %s",
                 request.remoteAddress()), "not allowed");
@@ -249,7 +241,7 @@ public class AuthService implements Service {
         return row.as(User.class);
     }
 
-    private Page selectPageById(int id) {
+    private Page selectPageById(String id) {
         DbRow row = db.execute(exec -> exec
                 .createNamedQuery("select-page")
                 .addParam("id", id)

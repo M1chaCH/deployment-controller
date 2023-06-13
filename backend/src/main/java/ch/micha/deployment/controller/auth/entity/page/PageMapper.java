@@ -18,7 +18,7 @@ public class PageMapper implements DbMapper<Page> {
         DbColumn privateAccess = row.column("private_access");
 
         return new Page(
-            id.as(Integer.class),
+            id.as(String.class),
             url.as(String.class),
             title.as(String.class),
             description.as(String.class),

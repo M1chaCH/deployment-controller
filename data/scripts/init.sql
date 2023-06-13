@@ -14,7 +14,7 @@ create table users
 drop table if exists pages;
 create table pages
 (
-    id          serial primary key,
+    id          varchar(255) unique primary key,
     url         varchar(255) not null,
     title       varchar(255) not null,
     description varchar(255) not null,

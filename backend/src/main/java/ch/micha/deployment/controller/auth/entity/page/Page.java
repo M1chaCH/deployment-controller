@@ -4,7 +4,7 @@ import io.helidon.common.Reflected;
 
 @Reflected
 public record Page(
-    int id,
+    String id,
     String url,
     String title,
     String description,

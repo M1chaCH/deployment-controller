@@ -1,7 +1,6 @@
 package ch.micha.deployment.controller.auth.resource;
 
 import ch.micha.deployment.controller.auth.entity.page.Page;
-import ch.micha.deployment.controller.auth.entity.page.addpage.AddPage;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
 import io.helidon.common.http.Http.Status;
 import io.helidon.dbclient.DbClient;
@@ -27,7 +26,7 @@ public class PageResource implements Service{
     public void update(Rules rules) {
         rules
             .get("/", this::getPages)
-            .post("/", Handler.create(AddPage.class, this::createPage))
+            .post("/", Handler.create(Page.class, this::createPage))
             .put("/", Handler.create(Page.class, this::editPage))
             .delete("/{id}", this::deletePage);
     }
@@ -40,7 +39,7 @@ public class PageResource implements Service{
                 LOGGER.log(Level.INFO, "{0} - successfully loaded all pages", sentResponse.status()));
     }
 
-    private void createPage(ServerRequest request, ServerResponse response, AddPage toAdd) {
+    private void createPage(ServerRequest request, ServerResponse response, Page toAdd) {
         LOGGER.log(Level.INFO, "adding page at {0}", new Object[]{ toAdd.url() });
         db.execute(exec -> exec
                 .createNamedInsert("insert-page")
@@ -70,7 +69,7 @@ public class PageResource implements Service{
     }
 
     private void deletePage(ServerRequest request, ServerResponse response) {
-        int pageId = Integer.parseInt(request.path().param("id"));
+        String pageId = request.path().param("id");
 
         LOGGER.log(Level.INFO, "deleting page with id {0}", new Object[]{ pageId });
 
