@@ -1,6 +1,5 @@
 <script>
 	import {user} from "./store.js";
-	import Login from "./Login.svelte";
 
 	export let apiUrl;
 
@@ -34,7 +33,7 @@
 </svelte:head>
 <main>
 	<h1>Micha Schweizer @ Home</h1>
-	<p style="max-width: 500px; font-size: 20px; font-weight: 300; padding-bottom: 5vh;">
+	<p class="page-description">
 		This page shows all applications that are deployed on my server. Feel free to explore and
 		get to know my projects more closely.
 		<br />
@@ -66,15 +65,6 @@
 	{:catch error}
 		<p>Could not load pages: {error.message}</p>
 	{/await}
-
-	{#if $user }
-		<p>{$user.mail}</p>
-	{:else }
-		<div>
-<!--			<h3>Login to see more pages</h3>-->
-<!--			<Login bind:apiUrl/>-->
-		</div>
-	{/if}
 </main>
 
 <style>
