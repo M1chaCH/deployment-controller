@@ -6,6 +6,7 @@ import ch.micha.deployment.controller.auth.entity.user.edituser.EditUser;
 import ch.micha.deployment.controller.auth.entity.user.User;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
 import ch.micha.deployment.controller.auth.error.NotFoundException;
+import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import io.helidon.common.http.Http.Status;
 import io.helidon.dbclient.DbClient;
 import io.helidon.dbclient.DbRow;
@@ -38,15 +39,18 @@ public class UserResource implements Service{
     }
 
     private void getUsers(ServerRequest request, ServerResponse response) {
-        LOGGER.info("loading all users");
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} loading all users", new Object[]{ requestId });
+
         response.send(db.execute(exec -> exec.namedQuery("select-users"))
                 .map(item -> item.as(JsonObject.class)), JsonObject.class)
-            .thenAccept(sentResponse ->
-                LOGGER.log(Level.INFO, "{0} - successfully loaded all users", sentResponse.status()));
+            .thenAccept(sentResponse -> LOGGER.log(Level.FINE, "{0} - successfully loaded all users", requestId))
+            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
     }
 
     private void addUser(ServerRequest request, ServerResponse response, AddUser toAdd) {
-        LOGGER.log(Level.INFO, "adding user {0} as admin:{1}", new Object[]{ toAdd.mail(), toAdd.admin() });
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} adding user {1} as admin:{2}", new Object[]{ requestId, toAdd.mail(), toAdd.admin() });
 
         String salt = EncodingUtil.generateSalt();
         String hashedPassword = EncodingUtil.hashString(toAdd.password(), salt);
@@ -58,15 +62,16 @@ public class UserResource implements Service{
                 .namedParam(user)
                 .execute())
             .thenAccept(count -> {
-                LOGGER.log(Level.INFO, "added {0} user(s)", count);
+                LOGGER.log(Level.FINE, "{0} added {1} user(s)", new Object[]{ requestId, count });
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> AppRequestException.respondFitting(response, t));
+            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
     }
 
     private void editUser(ServerRequest request, ServerResponse response, EditUser toEdit) {
-        LOGGER.log(Level.INFO, "updating user {0}-{1}", new Object[]{ toEdit.id(), toEdit.mail() });
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} updating user {1}-{2}", new Object[]{ requestId, toEdit.id(), toEdit.mail() });
 
         Optional<DbRow> userRow = db.execute(exec -> exec
             .createNamedGet("select-user")
@@ -87,27 +92,28 @@ public class UserResource implements Service{
                 .addParam("view_private", toEdit.viewPrivate())
                 .execute())
             .thenAccept(count -> {
-                LOGGER.log(Level.INFO, "changed {0} user(s)", new Object[]{ count });
+                LOGGER.log(Level.FINE, "{0} changed {1} user(s)", new Object[]{ requestId, count });
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> AppRequestException.respondFitting(response, t));
+            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
     }
 
     private void deleteUser(ServerRequest request, ServerResponse response) {
+        final String requestId = RequestLogHandler.parseRequestId(request);
         int userId = Integer.parseInt(request.path().param("id"));
 
-        LOGGER.log(Level.INFO, "deleting user with id {0}", new Object[]{ userId });
+        LOGGER.log(Level.FINE, "{0} deleting user with id {1}", new Object[]{ requestId, userId });
 
         db.execute(exec -> exec
                 .createNamedDelete("delete-user")
                 .addParam("id", userId)
                 .execute())
             .thenAccept(count -> {
-                LOGGER.log(Level.INFO, "deleted {0} user(s)", new Object[]{ count });
+                LOGGER.log(Level.FINE, "{0} deleted {1} user(s)", new Object[]{ requestId, count });
                 response.status(Status.NO_CONTENT_204);
                 response.send();
             })
-            .exceptionally(t -> AppRequestException.respondFitting(response, t));
+            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
     }
 }

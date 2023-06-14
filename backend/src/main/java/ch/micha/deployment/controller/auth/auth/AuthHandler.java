@@ -1,7 +1,8 @@
 package ch.micha.deployment.controller.auth.auth;
 
+import ch.micha.deployment.controller.auth.error.ForbiddenException;
+import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import io.helidon.common.http.Http.Method;
-import io.helidon.common.http.Http.Status;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
@@ -19,8 +20,10 @@ public class AuthHandler implements Handler {
 
     @Override
     public void accept(ServerRequest request, ServerResponse response) {
+        String requestId = RequestLogHandler.parseRequestId(request);
+
         if(request.method().equals(Method.GET) && request.requestedUri().path().equals("/pages")) {
-            LOGGER.log(Level.INFO, "GET request to /pages -> ignoring auth");
+            LOGGER.log(Level.FINE, "{0} GET request to /pages -> ignoring auth", requestId);
             request.next();
             return;
         }
@@ -30,15 +33,10 @@ public class AuthHandler implements Handler {
             return; // extract token responds with an error -> we don't have to do anything here
 
         service.validateSecurityToken(request, token);
-        if(!token.isAdmin()) {
-            LOGGER.log(Level.WARNING, "{0} tried to access admin",
-                new Object[]{ token.getUserMail() });
-            response.status(Status.FORBIDDEN_403);
-            response.send("not allowed");
-            return;
-        }
+        if(!token.isAdmin())
+            throw new ForbiddenException(String.format("%s tried to access admin", token.getUserMail()), "not allowed");
 
-        LOGGER.log(Level.INFO, "authorized admin request to {0}", new Object[]{ token.getUserMail() });
+        LOGGER.log(Level.FINE, "{0} authorized admin request to {1}", new Object[]{ requestId, token.getUserMail() });
         request.next();
     }
 }

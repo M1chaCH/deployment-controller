@@ -3,6 +3,8 @@ package ch.micha.deployment.controller.auth;
 import ch.micha.deployment.controller.auth.auth.AuthHandler;
 import ch.micha.deployment.controller.auth.auth.AuthService;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
+import ch.micha.deployment.controller.auth.error.GlobalErrorHandler;
+import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import ch.micha.deployment.controller.auth.resource.PageResource;
 import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
@@ -78,11 +80,15 @@ public final class Main {
         Config dbConfig = config.get("db");
         DbClient dbClient = DbClient.builder(dbConfig).build();
 
+        GlobalErrorHandler errorHandler = new GlobalErrorHandler();
+        RequestLogHandler requestLogHandler = new RequestLogHandler(config.get("app"));
         AuthService authService = new AuthService(dbClient, securityConfig);
         AuthHandler authHandler = new AuthHandler(authService);
 
         Routing.Builder builder = Routing.builder()
-            .error(AppRequestException.class, (req, res, ex) -> ex.sendResponse(res))
+            .error(AppRequestException.class, errorHandler::handleAppRequestException)
+            .error(Exception.class, errorHandler::handleException)
+            .any(requestLogHandler)
             .any(corsSupport)
             .register("/security", authService)
             .any("/users", authHandler)

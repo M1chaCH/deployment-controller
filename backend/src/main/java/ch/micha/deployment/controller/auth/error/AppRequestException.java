@@ -34,8 +34,8 @@ public abstract class AppRequestException extends RuntimeException{
         return new InternalException("caught unknown error", "unexpected error, please retry later", realCause);
     }
 
-    public static Void respondFitting(ServerResponse response, Throwable cause) {
-        AppRequestException.fittingException(cause).sendResponse(response);
+    public static Void respondFitting(ServerResponse response, String requestId, Throwable cause) {
+        AppRequestException.fittingException(cause).sendResponse(response, requestId);
         return null;
     }
 
@@ -55,12 +55,12 @@ public abstract class AppRequestException extends RuntimeException{
         this.unexpected = unexpected;
     }
 
-    public void sendResponse(ServerResponse response) {
+    public void sendResponse(ServerResponse response, String requestId) {
         if(isUnexpected())
-            LOGGER.log(Level.SEVERE, "caught unexpected error", this);
+            LOGGER.log(Level.SEVERE, String.format("%s caught unexpected error", requestId), this);
         else
-            LOGGER.log(Level.INFO, "handling error {0}: {1}, responding with {2}",
-                new Object[]{ getClass().getSimpleName(), getServerMessage(), getHttpStatus().code()});
+            LOGGER.log(Level.INFO, "{0} {1}: {2}, responding with {3}",
+                new Object[]{ requestId, getClass().getSimpleName(), getServerMessage(), getHttpStatus().code()});
 
         response.status(getHttpStatus());
         response.send(getClientMessage());

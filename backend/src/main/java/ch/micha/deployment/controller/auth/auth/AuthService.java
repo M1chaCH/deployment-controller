@@ -7,6 +7,7 @@ import ch.micha.deployment.controller.auth.entity.user.User;
 import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.ForbiddenException;
 import ch.micha.deployment.controller.auth.error.UnauthorizedException;
+import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import io.helidon.common.http.Http.Status;
 import io.helidon.config.Config;
 import io.helidon.dbclient.DbClient;
@@ -64,7 +65,8 @@ public class AuthService implements Service {
     }
 
     public void login(ServerRequest request, ServerResponse response, Credential credential) {
-        LOGGER.log(Level.INFO, "trying login for {0}", credential.mail());
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} trying login for {1}", new Object[]{ requestId, credential.mail() });
 
         User user = selectUserByMail(credential.mail());
         if(user == null)
@@ -72,7 +74,7 @@ public class AuthService implements Service {
 
         String hashedPassword = EncodingUtil.hashString(credential.password(), user.salt());
         if(hashedPassword.equals(user.password())) {
-            LOGGER.log(Level.INFO, "login granted for {0}", credential.mail());
+            LOGGER.log(Level.FINE, "{0} login granted for {1}", new Object[]{requestId, credential.mail()});
 
             String token = createJwt(new SecurityToken(
                 request.remoteAddress(),
@@ -95,13 +97,14 @@ public class AuthService implements Service {
     }
 
     public void validateTokenCookie(ServerRequest request, ServerResponse response) {
+        final String requestId = RequestLogHandler.parseRequestId(request);
         String pageIdParam = request.path().param(AUTH_REQUEST_PAGE_PARAM);
 
         if(pageIdParam == null || pageIdParam.isEmpty() || pageIdParam.isBlank())
             throw new BadRequestException(String.format("missing page param at auth request, from ip: %s",
                 request.remoteAddress()), "missing parameter");
 
-        LOGGER.log(Level.INFO, "validating token for request to page {0}", new Object[]{ pageIdParam });
+        LOGGER.log(Level.FINE, "{0} validating token for request to page {1}", new Object[]{ requestId, pageIdParam });
 
         Page page = selectPageById(pageIdParam);
         if(page == null)
@@ -109,8 +112,8 @@ public class AuthService implements Service {
                 request.remoteAddress()), "not allowed");
 
         if(!page.privateAccess()) {
-            LOGGER.log(Level.INFO, "access to public page granted: {0}",
-                new Object[]{ page.url() });
+            LOGGER.log(Level.FINE, "{0} access to public page granted: {1}",
+                new Object[]{ requestId, page.url() });
             response.status(Status.OK_200);
             response.send("enjoy!");
             return;
@@ -119,8 +122,8 @@ public class AuthService implements Service {
         SecurityToken token = extractTokenCookie(request.headers());
         validateSecurityToken(request, token);
         if(token.isPrivateAccess()) {
-            LOGGER.log(Level.INFO, "access to private page {0} granted for {1}",
-                new Object[]{ page.url(), token.getUserMail() });
+            LOGGER.log(Level.FINE, "{0} access to private page {1} granted for {2}",
+                new Object[]{ requestId, page.url(), token.getUserMail() });
             response.status(Status.OK_200);
             response.send("enjoy!");
         } else
@@ -204,11 +207,11 @@ public class AuthService implements Service {
     }
 
     private void createDefaultAdmin(String defaultMail, String defaultPassword) {
-        LOGGER.log(Level.INFO, "checking if default user with mail {0} exists", defaultMail);
+        LOGGER.log(Level.FINE, "checking if default user with mail {0} exists", defaultMail);
 
         User existingDefaultUser = selectUserByMail(defaultMail);
         if(existingDefaultUser == null) {
-            LOGGER.log(Level.INFO, "default user not found -> creating one");
+            LOGGER.log(Level.FINE, "default user not found -> creating one");
 
             String salt = EncodingUtil.generateSalt();
             String hashedPassword = EncodingUtil.hashString(defaultPassword, salt);
@@ -221,7 +224,7 @@ public class AuthService implements Service {
                     .addParam("admin", true)
                     .addParam("view_private", true)
                     .execute())
-                .thenAccept(count -> LOGGER.log(Level.INFO, "created default user"))
+                .thenAccept(count -> LOGGER.log(Level.FINE, "created default user"))
                 .exceptionally(t -> {
                     LOGGER.log(Level.SEVERE, "failed to create default user", t);
                     return null;

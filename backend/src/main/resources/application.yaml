@@ -4,13 +4,20 @@ server:
 
 app:
   security:
-    frontend: "http://localhost:8080"
+    frontend: "*"
     domain: "localhost"
     key: c29tZS1rZXk=
     tokenExpireHours: 168
     default:
       mail: admin@test.com
       password: admin
+  logs:
+    directory: "./logs"
+  location:
+    host: geolite.info
+    account: 873989
+    license: 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
+    cacheExpireHours: 48
 
 db:
   source: jdbc
