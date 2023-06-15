@@ -13,6 +13,7 @@ import io.helidon.config.Config;
 import io.helidon.dbclient.DbClient;
 import io.helidon.media.jsonb.JsonbSupport;
 import io.helidon.media.jsonp.JsonpSupport;
+import io.helidon.webserver.HttpException;
 import io.helidon.webserver.Routing;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.cors.CorsSupport;
@@ -87,6 +88,7 @@ public final class Main {
 
         Routing.Builder builder = Routing.builder()
             .error(AppRequestException.class, errorHandler::handleAppRequestException)
+            .error(HttpException.class, errorHandler::handleHttpException)
             .error(Exception.class, errorHandler::handleException)
             .any(requestLogHandler)
             .any(corsSupport)
