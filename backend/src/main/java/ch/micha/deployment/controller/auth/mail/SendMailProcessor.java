@@ -34,7 +34,7 @@ public class SendMailProcessor implements Runnable{
         this.sendMailQueue = sendMailQueue;
         Config mailConfig = appConfig.get("security.mail");
         this.mailFrom = mailConfig.get("from").asString().get();
-        LOGGER.log(Level.FINE, "initializing mail processor for {0}", new Object[]{ mailFrom });
+        LOGGER.log(Level.INFO, "initializing mail processor for {0}", new Object[]{ mailFrom });
 
         String smtpServer = mailConfig.get("smtp").get("server").asString().get();
         String smtpPort = mailConfig.get("smtp").get("port").asString().get();
@@ -62,7 +62,7 @@ public class SendMailProcessor implements Runnable{
     @Override
     public void run() {
         Thread.currentThread().setName("mail-sender");
-        LOGGER.log(Level.FINE, "mail sender thread created and started: {0}", new Object[]{ Thread.currentThread().getName() });
+        LOGGER.log(Level.INFO, "mail sender thread created and started: {0}", new Object[]{ Thread.currentThread().getName() });
 
         try {
             while (true)
