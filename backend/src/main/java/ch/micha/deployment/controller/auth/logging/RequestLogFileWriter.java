@@ -1,11 +1,3 @@
-/*
- * -----------------------------------------------------------------------------
- * © Swisslog AG
- * Swisslog is not liable for any usage of this source code that is not agreed on between Swisslog and the other party.
- * The mandatory legal liability remains unaffected.
- * -----------------------------------------------------------------------------
- */
-
 package ch.micha.deployment.controller.auth.logging;
 
 import java.io.BufferedWriter;
@@ -33,11 +25,15 @@ public class RequestLogFileWriter {
         validateLogFile();
     }
 
-    public void writeLine(String line) {
+    public void writeLine(String line) throws IOException {
         LOGGER.log(Level.FINE, "writing new line: {0}", new Object[]{ line});
-        // check if still same month
-        // if no, update log file
-        // write to log file
+
+        if(YearMonth.now().getMonthValue() != currentMonth)
+            validateLogFile();
+
+        logOutput.write(line);
+        logOutput.newLine();
+        logOutput.flush();
     }
 
     private void initLogDir() throws IOException {
@@ -56,8 +52,8 @@ public class RequestLogFileWriter {
                 logOutput.close();
 
             Files.createFile(logFile);
-            logOutput = new BufferedWriter(new FileWriter(logFile.toFile()));
             LOGGER.log(Level.FINE, "created new log file at {0}", new Object[]{ logFile.toAbsolutePath() });
         }
+        logOutput = new BufferedWriter(new FileWriter(logFile.toFile(), true));
     }
 }

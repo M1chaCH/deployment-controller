@@ -1,11 +1,3 @@
-/*
- * -----------------------------------------------------------------------------
- * © Swisslog AG
- * Swisslog is not liable for any usage of this source code that is not agreed on between Swisslog and the other party.
- * The mandatory legal liability remains unaffected.
- * -----------------------------------------------------------------------------
- */
-
 package ch.micha.deployment.controller.auth.location;
 
 import com.maxmind.geoip2.WebServiceClient;
@@ -15,7 +7,6 @@ import io.helidon.config.Config;
 
 import java.io.IOException;
 import java.net.InetAddress;
-import java.util.List;
 import java.util.Optional;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -24,13 +15,10 @@ public class LocationResolver {
     private static final Logger LOGGER = Logger.getLogger(LocationResolver.class.getSimpleName());
     private static final String LOCAL_REMOTE_ADDRESS = "0:0:0:0:0:0:0:1";
 
-    private final Config locationConfig;
     private final WebServiceClient locationWebClient;
     private final LocationCache locationCache;
 
     public LocationResolver(Config locationConfig) {
-        this.locationConfig = locationConfig;
-
         locationWebClient = initializeLocationWebClient(locationConfig);
         locationCache = new LocationCache(locationConfig.get("cacheExpireHours").as(Integer.class).get());
     }

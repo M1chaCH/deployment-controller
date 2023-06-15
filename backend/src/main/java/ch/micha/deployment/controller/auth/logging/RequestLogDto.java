@@ -1,11 +1,3 @@
-/*
- * -----------------------------------------------------------------------------
- * © Swisslog AG
- * Swisslog is not liable for any usage of this source code that is not agreed on between Swisslog and the other party.
- * The mandatory legal liability remains unaffected.
- * -----------------------------------------------------------------------------
- */
-
 package ch.micha.deployment.controller.auth.logging;
 
 import com.maxmind.geoip2.model.CityResponse;
@@ -30,5 +22,6 @@ public class RequestLogDto {
     private Http.ResponseStatus status;
     private Instant requestStart;
     private long duration;
+    @SuppressWarnings("OptionalUsedAsFieldOrParameterType") // intended to be an optional field
     private Optional<CityResponse> location;
 }
