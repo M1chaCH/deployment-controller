@@ -86,11 +86,12 @@ public class AuthService implements Service {
             ));
 
             String domain = securityConfig.get("domain").asString().get();
+            String expires = Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS)).toString();
 
             response.status(Status.NO_CONTENT_204);
             response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true; "
-                + "SameSite=Strict; Secure=true; Domain=%s;",
-                BEARER_COOKIE, token, domain));
+                + "SameSite=Strict; Secure=true; Domain=%s; Expires=%s;",
+                BEARER_COOKIE, token, domain, expires));
             response.send();
         } else
             throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
