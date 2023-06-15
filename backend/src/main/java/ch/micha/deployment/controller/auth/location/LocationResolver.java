@@ -14,16 +14,23 @@ import java.util.logging.Logger;
 public class LocationResolver {
     private static final Logger LOGGER = Logger.getLogger(LocationResolver.class.getSimpleName());
     private static final String LOCAL_REMOTE_ADDRESS = "0:0:0:0:0:0:0:1";
+    private static LocationResolver instant;
 
     private final WebServiceClient locationWebClient;
     private final LocationCache locationCache;
 
-    public LocationResolver(Config locationConfig) {
+    public static synchronized LocationResolver getInstance(Config locationConfig) {
+        if(instant == null)
+            instant = new LocationResolver(locationConfig);
+        return instant;
+    }
+
+    private LocationResolver(Config locationConfig) {
         locationWebClient = initializeLocationWebClient(locationConfig);
         locationCache = new LocationCache(locationConfig.get("cacheExpireHours").as(Integer.class).get());
     }
 
-    public Optional<CityResponse> resolveLocation(String remoteAddress) {
+    public synchronized Optional<CityResponse> resolveLocation(String remoteAddress) {
         Optional<CityResponse> cachedCity = locationCache.get(remoteAddress);
         if(cachedCity.isPresent()) {
             LOGGER.log(Level.FINE, "resolved (cached!) location for {0}: {1} -> {2}",

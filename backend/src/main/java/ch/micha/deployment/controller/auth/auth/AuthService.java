@@ -8,6 +8,9 @@ import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.ForbiddenException;
 import ch.micha.deployment.controller.auth.error.UnauthorizedException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
+import ch.micha.deployment.controller.auth.mail.SendMailDto;
+import ch.micha.deployment.controller.auth.mail.SendMailDto.Type;
+import ch.micha.deployment.controller.auth.mail.SendMailProcessor;
 import io.helidon.common.http.Http.Status;
 import io.helidon.config.Config;
 import io.helidon.dbclient.DbClient;
@@ -29,6 +32,8 @@ import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import javax.crypto.spec.SecretKeySpec;
@@ -43,17 +48,24 @@ public class AuthService implements Service {
     private final Config securityConfig;
     private final Key key;
     private final long tokenExpireHours;
+    private final BlockingQueue<SendMailDto> sendMailQueue = new LinkedBlockingQueue<>();
+    private final String adminMail;
 
-    public AuthService(DbClient db, Config config) {
+    public AuthService(DbClient db, Config appConfig) {
         this.db = db;
-        this.securityConfig = config;
+        this.securityConfig = appConfig.get("security");
+        this.adminMail = securityConfig.get("default.admin").asString().get();
 
-        String keyConfig = config.get("key").asString().get();
+        String keyConfig = securityConfig.get("key").asString().get();
         key = new SecretKeySpec(Base64.getDecoder().decode(keyConfig), SIGNATURE_ALGORITHM.getJcaName());
 
-        tokenExpireHours = config.get("tokenExpireHours").asLong().get();
+        tokenExpireHours = securityConfig.get("tokenExpireHours").asLong().get();
 
-        createDefaults(config.get("default"));
+        createDefaults(securityConfig.get("default"));
+
+        Thread sendMailThread = new Thread(new SendMailProcessor(sendMailQueue, appConfig));
+        sendMailThread.setName("mail-sender");
+        sendMailThread.start();
     }
 
     @Override
@@ -76,14 +88,15 @@ public class AuthService implements Service {
         if(hashedPassword.equals(user.password())) {
             LOGGER.log(Level.FINE, "{0} login granted for {1}", new Object[]{requestId, credential.mail()});
 
-            String token = createJwt(new SecurityToken(
+            SecurityToken token = new SecurityToken(
                 request.remoteAddress(),
                 Date.from(Instant.now()),
                 user.mail(),
                 user.admin(),
                 user.viewPrivate(),
                 Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS))
-            ));
+            );
+            String jwtToken = createJwt(token);
 
             String domain = securityConfig.get("domain").asString().get();
             String expires = Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS)).toString();
@@ -91,8 +104,14 @@ public class AuthService implements Service {
             response.status(Status.NO_CONTENT_204);
             response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true; "
                 + "SameSite=Strict; Secure=true; Domain=%s; Expires=%s;",
-                BEARER_COOKIE, token, domain, expires));
+                BEARER_COOKIE, jwtToken, domain, expires));
             response.send();
+
+            sendMailQueue.add(new SendMailDto(
+                Type.LOGIN_GRANT,
+                token,
+                adminMail
+            ));
         } else
             throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
     }

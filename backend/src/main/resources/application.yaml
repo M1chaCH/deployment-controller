@@ -9,8 +9,15 @@ app:
     key: c29tZS1rZXk=
     tokenExpireHours: 168
     default:
+      admin: admin@test.com
       mail: admin@test.com
       password: admin
+    mail:
+      from: admin@test.com
+      password: admin
+      smtp:
+        port: 22
+        server: ssl.mail.com
   logs:
     directory: "./logs"
   location:

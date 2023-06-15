@@ -66,9 +66,9 @@ public final class Main {
      * @return routing configured with JSON support, a health check, and a service
      */
     private static Routing createRouting(Config config) {
-        Config securityConfig = config.get("app.security");
+        Config appConfig = config.get("app");
 
-        String clientUrl = securityConfig.get("frontend").asString().get();
+        String clientUrl = appConfig.get("security.frontend").asString().get();
         final CorsSupport corsSupport = CorsSupport.builder()
             .addCrossOrigin(CrossOriginConfig.builder()
                 .pathPattern("*")
@@ -82,8 +82,8 @@ public final class Main {
         DbClient dbClient = DbClient.builder(dbConfig).build();
 
         GlobalErrorHandler errorHandler = new GlobalErrorHandler();
-        RequestLogHandler requestLogHandler = new RequestLogHandler(config.get("app"));
-        AuthService authService = new AuthService(dbClient, securityConfig);
+        RequestLogHandler requestLogHandler = new RequestLogHandler(appConfig);
+        AuthService authService = new AuthService(dbClient, appConfig);
         AuthHandler authHandler = new AuthHandler(authService);
 
         Routing.Builder builder = Routing.builder()

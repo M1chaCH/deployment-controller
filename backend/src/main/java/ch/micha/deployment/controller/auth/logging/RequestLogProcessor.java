@@ -26,7 +26,7 @@ public class RequestLogProcessor implements Runnable{
         this.requestLogQueue = requestLogQueue;
 
         LOGGER.log(Level.INFO, "initializing request log processor", new Object[]{ });
-        this.locationResolver = new LocationResolver(locationConfig);
+        this.locationResolver = LocationResolver.getInstance(locationConfig);
         writer = new RequestLogFileWriter(absoluteLogDir);
     }
 
