@@ -36,6 +36,10 @@ public class LocationResolver {
             LOGGER.log(Level.FINE, "resolved (cached!) location for {0}: {1} -> {2}",
                     new Object[]{ remoteAddress, cachedCity.get().getCountry().getName(), cachedCity.get().getCity().getName() });
             return cachedCity;
+        } else if(locationCache.hasFailed(remoteAddress)){
+            LOGGER.log(Level.FINE, "resolved (cached!) location for {0}: not found!",
+                new Object[]{ remoteAddress });
+            return Optional.empty();
         }
 
         try{
@@ -56,6 +60,7 @@ public class LocationResolver {
             LOGGER.log(Level.SEVERE, "ioexception during location loading: {0} - {1}",
                     new Object[]{ remoteAddress, ioe.getMessage() });
         }
+        locationCache.putFailed(remoteAddress);
         return Optional.empty();
     }
 
