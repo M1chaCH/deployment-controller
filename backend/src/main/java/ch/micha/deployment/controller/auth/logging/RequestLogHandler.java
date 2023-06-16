@@ -1,5 +1,6 @@
 package ch.micha.deployment.controller.auth.logging;
 
+import ch.micha.deployment.controller.auth.auth.AuthService;
 import io.helidon.config.Config;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.ServerRequest;
@@ -51,7 +52,7 @@ public class RequestLogHandler implements Handler {
                 requestId,
                 request.method().name(),
                 request.requestedUri().path(),
-                request.remoteAddress()
+                AuthService.loadRemoteAddress(request)
         });
 
         response.whenSent().thenAcceptAsync(sentResponse -> {
@@ -67,7 +68,7 @@ public class RequestLogHandler implements Handler {
             requestLogQueue.add(new RequestLogDto(
                     requestId,
                     request.method(),
-                    request.remoteAddress(),
+                    AuthService.loadRemoteAddress(request),
                     request.requestedUri().path(),
                     sentResponse.status(),
                     requestStart,

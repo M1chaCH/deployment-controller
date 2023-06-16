@@ -51,6 +51,18 @@ public class AuthService implements Service {
     private final BlockingQueue<SendMailDto> sendMailQueue = new LinkedBlockingQueue<>();
     private final String adminMail;
 
+    public static String loadRemoteAddress(ServerRequest request) {
+        Optional<String> xRealIp = request.headers().first("X-Real-IP");
+        if(xRealIp.isPresent() && !xRealIp.get().isBlank())
+            return xRealIp.get();
+
+        Optional<String> xForwardFor = request.headers().first("X-Forwarded-For");
+        if(xForwardFor.isPresent() && !xForwardFor.get().isBlank())
+            return xForwardFor.get();
+
+        return request.remoteAddress();
+    }
+
     public AuthService(DbClient db, Config appConfig) {
         this.db = db;
         this.securityConfig = appConfig.get("security");
@@ -89,7 +101,7 @@ public class AuthService implements Service {
             LOGGER.log(Level.FINE, "{0} login granted for {1}", new Object[]{requestId, credential.mail()});
 
             SecurityToken token = new SecurityToken(
-                request.remoteAddress(),
+                loadRemoteAddress(request),
                 Date.from(Instant.now()),
                 user.mail(),
                 user.admin(),
@@ -122,14 +134,14 @@ public class AuthService implements Service {
 
         if(pageIdParam == null || pageIdParam.isEmpty() || pageIdParam.isBlank())
             throw new BadRequestException(String.format("missing page param at auth request, from ip: %s",
-                request.remoteAddress()), "missing parameter");
+                loadRemoteAddress(request)), "missing parameter");
 
         LOGGER.log(Level.FINE, "{0} validating token for request to page {1}", new Object[]{ requestId, pageIdParam });
 
         Page page = selectPageById(pageIdParam);
         if(page == null)
             throw new ForbiddenException(String.format("access to unknown page denied, from: %s",
-                request.remoteAddress()), "not allowed");
+                loadRemoteAddress(request)), "not allowed");
 
         if(!page.privateAccess()) {
             LOGGER.log(Level.FINE, "{0} access to public page granted: {1}",
@@ -207,11 +219,11 @@ public class AuthService implements Service {
     public void validateSecurityToken(ServerRequest request, SecurityToken token) {
         if(token == null)
             throw new UnauthorizedException(String.format("got request from %s, with no token provided",
-                request.remoteAddress()), "unauthorized");
+                loadRemoteAddress(request)), "unauthorized");
         // handle client change (token rubbery dude)
-        if(!token.getIssuer().equals(request.remoteAddress())) {
+        if(!token.getIssuer().equals(loadRemoteAddress(request))) {
             throw new UnauthorizedException(String.format("invalid issuer in request: %s changed to %s, associated user: %s",
-                token.getIssuer(), request.remoteAddress(), token.getUserMail()), "unauthorized request");
+                token.getIssuer(), loadRemoteAddress(request), token.getUserMail()), "unauthorized request");
             // handle token expired
         } else if(token.getExpiresAt().before(Date.from(Instant.now()))) {
             throw new UnauthorizedException(String.format("token for %s expired",

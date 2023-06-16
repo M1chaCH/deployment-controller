@@ -50,15 +50,19 @@ public class LocationResolver {
                 requestLocation = locationWebClient.city(InetAddress.getByName(remoteAddress));
 
             LOGGER.log(Level.FINE, "resolved location for {0}: {1} -> {2}",
-                    new Object[]{ remoteAddress, requestLocation.getCountry().getName(), requestLocation.getCity().getName() });
+                new Object[]{ remoteAddress, requestLocation.getCountry().getName(), requestLocation.getCity().getName() });
             locationCache.put(remoteAddress, requestLocation);
             return Optional.of(requestLocation);
         } catch (GeoIp2Exception e) {
-            LOGGER.log(Level.SEVERE, "failed to load location from request: {0} - {1}",
+            if(e.getMessage().contains("is a reserved IP address"))
+                LOGGER.log(Level.WARNING, "failed to load location from request: {0}, request came from within the network",
+                    new Object[]{ remoteAddress });
+            else
+                LOGGER.log(Level.SEVERE, "failed to load location from request: {0} - {1}",
                     new Object[]{ remoteAddress, e.getMessage() });
         } catch (IOException ioe) {
             LOGGER.log(Level.SEVERE, "ioexception during location loading: {0} - {1}",
-                    new Object[]{ remoteAddress, ioe.getMessage() });
+                new Object[]{ remoteAddress, ioe.getMessage() });
         }
         locationCache.putFailed(remoteAddress);
         return Optional.empty();
