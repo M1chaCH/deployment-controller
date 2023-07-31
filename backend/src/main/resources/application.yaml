@@ -16,6 +16,8 @@ app:
       from: admin@test.com
       password: admin
       smtp:
+        user: smtp-relay@admin.com
+        password: smtp-relay-admin-password
         port: 22
         server: ssl.mail.com
   logs:
@@ -48,4 +50,3 @@ db:
     update-page: "update pages set url = :url, title = :title, description = :description, private_access = :private_access where id = :id"
     delete-page: "delete from pages where id = :id"
     mark-login: "update users set last_login = :last_login where id = :id"
-

@@ -49,8 +49,8 @@ public class SendMailProcessor implements Runnable{
             @Override
             protected PasswordAuthentication getPasswordAuthentication() {
                 return new PasswordAuthentication(
-                    mailFrom,
-                    mailConfig.get("password").asString().get()
+                    mailConfig.get("smtp").get("user").asString().get(),
+                    mailConfig.get("smtp").get("password").asString().get()
                 );
             }
         });
