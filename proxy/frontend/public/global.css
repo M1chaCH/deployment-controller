@@ -1,29 +1,39 @@
+@import "michu-tech.colors.css";
+
 /* colors: https://coolors.co/0D181C-264653-2a9d8f-e9c46a-f4a261-e76f51 */
-:root {
-  --black: #0D181C;
-  --blue: #264653;
-  --gray: #2A9D8F;
-  --yellow: #E9C46A;
-  --brown: #F4A261;
-}
+/*:root {*/
+/*  --black: #0D181C;*/
+/*  --blue: #264653;*/
+/*  --gray: #2A9D8F;*/
+/*  --yellow: #E9C46A;*/
+/*  --brown: #F4A261;*/
+/*}*/
 
 * {
   font-family: "Inter", sans-serif;
-  color: var(--black);
+  color: var(--michu-tech-foreground);
 }
 
 ::selection {
-  color: var(--gray);
-  background: var(--blue);
+  color: var(--michu-tech-accent);
+  background: var(--michu-tech-primary);
 }
 
 html {
-  background-color: #E76F51;
+  background-color: var(--michu-tech-background);
   min-height: 100svh;
 }
 
 body {
   padding: 8vw;
+}
+
+#michu-tech-logo-upper {
+  fill: var(--michu-tech-primary);
+}
+
+#michu-tech-logo-lower {
+  fill: var(--michu-tech-accent);
 }
 
 h1 {
@@ -45,8 +55,9 @@ h1 {
 /*noinspection CssReplaceWithShorthandSafely*/
 .input {
   border: 4px solid;
-  border-color: color-mix(in srgb, var(--blue) 75%, transparent);
-  background-color: var(--gray);
+  border-color: color-mix(in srgb, var(--michu-tech-primary) 75%, transparent);
+  border-radius: 5px;
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 15%, transparent);
   outline: none;
   padding: 10px;
 
@@ -54,12 +65,12 @@ h1 {
 }
 
 .input::placeholder {
-  color: color-mix(in srgb, var(--black) 60%, transparent);
+  color: color-mix(in srgb, var(--michu-tech-foreground) 60%, transparent);
 }
 
 .input:active,
 .input:focus {
-  border-color: var(--blue);
+  border-color: var(--michu-tech-primary);
 }
 
 .labeled-input {
@@ -77,38 +88,38 @@ h1 {
 
 .button {
   cursor: pointer;
-  border: 4px solid var(--blue);
+  border: none;
+  border-radius: 5px;
   padding: 10px;
   width: 100px;
   font-weight: 700;
-  background-color: var(--gray);
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 15%, transparent);
 
   transition: all 200ms ease-out;
 }
 
 .button:hover {
-  filter: brightness(120%);
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 25%, transparent);
 }
 
 .button:disabled,
 .button:disabled:hover {
   cursor: default;
-  background-color: transparent;
-  border-color: color-mix(in srgb, var(--blue) 50%, transparent);
-  color: color-mix(in srgb, var(--black) 60%, transparent);
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 5%, transparent);
+  color: color-mix(in srgb, var(--michu-tech-foreground) 60%, transparent);
 
   filter: brightness(1);
 }
 
 .checkbox {
-  accent-color: var(--gray);
+  accent-color: var(--michu-tech-primary);
   width: 32px;
   height: 32px;
   cursor: pointer;
 }
 
 .checkbox:checked {
-  background-color: var(--blue);
+  background-color: var(--michu-tech-accent);
 }
 
 .page-description {
