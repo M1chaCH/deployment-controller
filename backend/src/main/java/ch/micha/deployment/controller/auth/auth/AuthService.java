@@ -22,6 +22,7 @@ import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
 import io.jsonwebtoken.Claims;
+import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import jakarta.json.Json;
@@ -195,7 +196,13 @@ public class AuthService implements Service {
 
     public SecurityToken parseJwt(String token) {
         SecurityToken securityToken = new SecurityToken();
-        Claims claims = Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
+        Claims claims;
+        try {
+             claims = Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
+        } catch (JwtException jwtException) {
+            throw new UnauthorizedException(String.format("caught invalid token: %s - %s", jwtException.getClass().getSimpleName(), jwtException.getMessage()),
+                "invalid token provided");
+        }
 
         securityToken.setIssuer(claims.getIssuer());
         securityToken.setIssuedAt(claims.getIssuedAt());

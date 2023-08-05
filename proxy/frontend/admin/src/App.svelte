@@ -274,8 +274,9 @@
 	}
 
 	.item {
-		background-color: var(--gray);
-		border: 2px solid var(--blue);
+		background-color: var(--michu-tech-primary);
+		border: 2px solid var(--michu-tech-accent);
+		border-radius: 5px;
 
 		display: flex;
 		flex-flow: row nowrap;
@@ -304,15 +305,15 @@
 		justify-content: center;
 		align-items: center;
 		cursor: pointer;
-		border: 2px solid var(--blue);
+		border: 2px solid var(--michu-tech-accent);
 	}
 
 	.icon-button:hover {
-		background-color: color-mix(in srgb, var(--brown) 50%, transparent);
+		background-color: color-mix(in srgb, var(--michu-tech-accent) 50%, transparent);
 	}
 
 	.icon-button span {
-		color: color-mix(in srgb, var(--blue) 75%, transparent);
+		color: color-mix(in srgb, var(--michu-tech-primary) 75%, transparent);
 	}
 
 	.delete-confirmation {
