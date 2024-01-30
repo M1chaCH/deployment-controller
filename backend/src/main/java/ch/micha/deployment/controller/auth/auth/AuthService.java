@@ -1,9 +1,13 @@
 package ch.micha.deployment.controller.auth.auth;
 
 import ch.micha.deployment.controller.auth.EncodingUtil;
-import ch.micha.deployment.controller.auth.entity.credentials.Credential;
-import ch.micha.deployment.controller.auth.entity.page.Page;
-import ch.micha.deployment.controller.auth.entity.user.User;
+import ch.micha.deployment.controller.auth.db.CachedPageDb;
+import ch.micha.deployment.controller.auth.db.CachedUserDb;
+import ch.micha.deployment.controller.auth.db.PageEntity;
+import ch.micha.deployment.controller.auth.db.UserEntity;
+import ch.micha.deployment.controller.auth.db.UserPageEntity;
+import ch.micha.deployment.controller.auth.dto.CredentialDto;
+import ch.micha.deployment.controller.auth.dto.UserReadDto;
 import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.ForbiddenException;
 import ch.micha.deployment.controller.auth.error.UnauthorizedException;
@@ -13,8 +17,6 @@ import ch.micha.deployment.controller.auth.mail.SendMailDto.Type;
 import ch.micha.deployment.controller.auth.mail.SendMailProcessor;
 import io.helidon.common.http.Http.Status;
 import io.helidon.config.Config;
-import io.helidon.dbclient.DbClient;
-import io.helidon.dbclient.DbRow;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.RequestHeaders;
 import io.helidon.webserver.Routing.Rules;
@@ -25,18 +27,19 @@ import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
-import jakarta.json.Json;
-import jakarta.json.JsonObjectBuilder;
 import java.security.Key;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
+import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Collectors;
 import javax.crypto.spec.SecretKeySpec;
 
 public class AuthService implements Service {
@@ -45,7 +48,8 @@ public class AuthService implements Service {
     private static final String AUTH_REQUEST_PAGE_PARAM = "page";
     private static final String BEARER_COOKIE = "Bearer";
 
-    private final DbClient db;
+    private final CachedUserDb userDb;
+    private final CachedPageDb pageDb;
     private final Config securityConfig;
     private final Key key;
     private final long tokenExpireHours;
@@ -64,8 +68,9 @@ public class AuthService implements Service {
         return request.remoteAddress();
     }
 
-    public AuthService(DbClient db, Config appConfig) {
-        this.db = db;
+    public AuthService(CachedUserDb userDb, CachedPageDb pageDb, Config appConfig) {
+        this.userDb = userDb;
+        this.pageDb = pageDb;
         this.securityConfig = appConfig.get("security");
         this.adminMail = securityConfig.get("default.admin").asString().get();
 
@@ -84,29 +89,29 @@ public class AuthService implements Service {
     @Override
     public void update(Rules rules) {
         rules
-            .post("/login", Handler.create(Credential.class, this::login))
+            .post("/login", Handler.create(CredentialDto.class, this::login))
             .get("/auth/{" + AUTH_REQUEST_PAGE_PARAM + "}", this::validateTokenCookie)
             .get("/auth", this::isLoggedIn);
     }
 
-    public void login(ServerRequest request, ServerResponse response, Credential credential) {
+    public void login(ServerRequest request, ServerResponse response, CredentialDto credentialDto) {
         final String requestId = RequestLogHandler.parseRequestId(request);
-        LOGGER.log(Level.FINE, "{0} trying login for {1}", new Object[]{ requestId, credential.mail() });
+        LOGGER.log(Level.FINE, "{0} trying login for {1}", new Object[]{requestId, credentialDto.mail() });
 
-        User user = selectUserByMail(credential.mail());
-        if(user == null)
-            throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
+        UserEntity user = userDb.selectUserByMail(credentialDto.mail())
+                                .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s", credentialDto.mail()), "invalid credentials"));
 
-        String hashedPassword = EncodingUtil.hashString(credential.password(), user.salt());
-        if(hashedPassword.equals(user.password())) {
-            LOGGER.log(Level.FINE, "{0} login granted for {1}", new Object[]{requestId, credential.mail()});
+        String hashedPassword = EncodingUtil.hashString(credentialDto.password(), user.getSalt());
+        if(hashedPassword.equals(user.getPassword())) {
+            LOGGER.log(Level.FINE, "{0} login granted for {1}", new Object[]{requestId, credentialDto.mail()});
 
             SecurityToken token = new SecurityToken(
                 loadRemoteAddress(request),
                 Date.from(Instant.now()),
-                user.mail(),
-                user.admin(),
-                user.viewPrivate(),
+                user.getId().toString(),
+                user.getMail(),
+                user.isAdmin(),
+                user.getPages().stream().map(UserPageEntity::getPageId).collect(Collectors.joining(SecurityToken.CLAIM_PRIVATE_ACCESS_DELIMITER)),
                 Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS))
             );
             String jwtToken = createJwt(token);
@@ -126,7 +131,7 @@ public class AuthService implements Service {
                 adminMail
             ));
         } else
-            throw new ForbiddenException(String.format("login denied for %s", credential.mail()), "invalid credentials");
+            throw new ForbiddenException(String.format("login denied for %s", credentialDto.mail()), "invalid credentials");
     }
 
     public void validateTokenCookie(ServerRequest request, ServerResponse response) {
@@ -139,14 +144,12 @@ public class AuthService implements Service {
 
         LOGGER.log(Level.FINE, "{0} validating token for request to page {1}", new Object[]{ requestId, pageIdParam });
 
-        Page page = selectPageById(pageIdParam);
-        if(page == null)
-            throw new ForbiddenException(String.format("access to unknown page denied, from: %s",
-                loadRemoteAddress(request)), "not allowed");
+        PageEntity page = pageDb.selectPage(pageIdParam)
+                                .orElseThrow(() -> new ForbiddenException(String.format("access to unknown page denied, from: %s", loadRemoteAddress(request)), "not allowed"));
 
-        if(!page.privateAccess()) {
+        if(!page.isPrivateAccess()) {
             LOGGER.log(Level.FINE, "{0} access to public page granted: {1}",
-                new Object[]{ requestId, page.url() });
+                new Object[]{ requestId, page.getUrl() });
             response.status(Status.OK_200);
             response.send("enjoy!");
             return;
@@ -154,32 +157,31 @@ public class AuthService implements Service {
 
         SecurityToken token = extractTokenCookie(request.headers());
         validateSecurityToken(request, token);
-        if(token.isPrivateAccess()) {
+        if(token.getPrivatePagesAccess().contains(pageIdParam)) {
             LOGGER.log(Level.FINE, "{0} access to private page {1} granted for {2}",
-                new Object[]{ requestId, page.url(), token.getUserMail() });
+                new Object[]{ requestId, page.getUrl(), token.getUserMail() });
             response.status(Status.OK_200);
             response.send("enjoy!");
         } else
             throw new ForbiddenException(String.format("access to private page %s refused for %s",
-                page.url(), token.getUserMail()), "not allowed");
+                page.getId(), token.getUserMail()), "not allowed");
     }
 
     public void isLoggedIn(ServerRequest request, ServerResponse response) {
-        SecurityToken token = extractTokenCookie(request.headers());
-        User user = selectUserByMail(token.getUserMail());
+        try {
+            SecurityToken token = extractTokenCookie(request.headers());
+            UserEntity user = userDb.selectUser(UUID.fromString(token.getUserId()));
 
-        if(user == null) {
-            response.status(Status.NO_CONTENT_204);
-            response.send();
-            return;
+            if(user == null) {
+                response.status(Status.NO_CONTENT_204);
+                response.send();
+                return;
+            }
+
+            response.send(new UserReadDto(user.getId(), user.getMail(), user.isAdmin(), user.getPages()));
+        } catch(SQLException e){
+            throw new BadRequestException("unexpected db exception", "could not read user", e);
         }
-
-        JsonObjectBuilder jsonUserBuilder = Json.createObjectBuilder();
-        jsonUserBuilder.add("mail", user.mail());
-        jsonUserBuilder.add("admin", user.admin());
-        jsonUserBuilder.add("viewPrivate", user.viewPrivate());
-
-        response.send(jsonUserBuilder.build());
     }
 
     public String createJwt(SecurityToken securityToken) {
@@ -187,9 +189,10 @@ public class AuthService implements Service {
             .setIssuer(securityToken.getIssuer())
             .setIssuedAt(securityToken.getIssuedAt())
             .setExpiration(securityToken.getExpiresAt())
+            .claim(SecurityToken.CLAIM_USER_ID, securityToken.getUserId())
             .claim(SecurityToken.CLAIM_USER_MAIL, securityToken.getUserMail())
             .claim(SecurityToken.CLAIM_ADMIN, securityToken.isAdmin())
-            .claim(SecurityToken.CLAIM_PRIVATE_ACCESS, securityToken.isPrivateAccess())
+            .claim(SecurityToken.CLAIM_PRIVATE_ACCESS, securityToken.getPrivatePagesAccess())
             .signWith(SIGNATURE_ALGORITHM, key)
             .compact();
     }
@@ -206,9 +209,10 @@ public class AuthService implements Service {
 
         securityToken.setIssuer(claims.getIssuer());
         securityToken.setIssuedAt(claims.getIssuedAt());
+        securityToken.setUserId(claims.get(SecurityToken.CLAIM_USER_ID, String.class));
         securityToken.setUserMail(claims.get(SecurityToken.CLAIM_USER_MAIL, String.class));
         securityToken.setAdmin(claims.get(SecurityToken.CLAIM_ADMIN, Boolean.class));
-        securityToken.setPrivateAccess(claims.get(SecurityToken.CLAIM_PRIVATE_ACCESS, Boolean.class));
+        securityToken.setPrivatePagesAccess(claims.get(SecurityToken.CLAIM_PRIVATE_ACCESS, String.class));
         securityToken.setExpiresAt(claims.getExpiration());
 
         return securityToken;
@@ -248,50 +252,18 @@ public class AuthService implements Service {
     private void createDefaultAdmin(String defaultMail, String defaultPassword) {
         LOGGER.log(Level.FINE, "checking if default user with mail {0} exists", defaultMail);
 
-        User existingDefaultUser = selectUserByMail(defaultMail);
-        if(existingDefaultUser == null) {
+        Optional<UserEntity> existingDefaultUser = userDb.selectUserByMail(defaultMail);
+        if(existingDefaultUser.isEmpty()) {
             LOGGER.log(Level.FINE, "default user not found -> creating one");
 
             String salt = EncodingUtil.generateSalt();
             String hashedPassword = EncodingUtil.hashString(defaultPassword, salt);
 
-            db.execute(exec -> exec
-                    .createNamedInsert("insert-user")
-                    .addParam("mail", defaultMail)
-                    .addParam("password", hashedPassword)
-                    .addParam("salt", salt)
-                    .addParam("admin", true)
-                    .addParam("view_private", true)
-                    .execute())
-                .thenAccept(count -> LOGGER.log(Level.FINE, "created default user"))
-                .exceptionally(t -> {
-                    LOGGER.log(Level.SEVERE, "failed to create default user", t);
-                    return null;
-                });
+            try {
+                userDb.insertUser(UUID.randomUUID(), defaultMail, hashedPassword, salt, true, new String[0]);
+            } catch (SQLException e) {
+                LOGGER.log(Level.WARNING, "could not create default admin", e);
+            }
         }
-    }
-
-    private User selectUserByMail(String mail) {
-        DbRow row = db.execute(exec -> exec
-                .createNamedQuery("select-user-mail")
-                .addParam("mail", mail)
-                .execute()
-            ).first()
-            .await();
-        if(row == null)
-            return null;
-        return row.as(User.class);
-    }
-
-    private Page selectPageById(String id) {
-        DbRow row = db.execute(exec -> exec
-                .createNamedQuery("select-page")
-                .addParam("id", id)
-                .execute()
-            ).first()
-            .await();
-        if(row == null)
-            return null;
-        return row.as(Page.class);
     }
 }

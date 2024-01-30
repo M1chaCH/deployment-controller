@@ -2,6 +2,9 @@ package ch.micha.deployment.controller.auth;
 
 import ch.micha.deployment.controller.auth.auth.AuthHandler;
 import ch.micha.deployment.controller.auth.auth.AuthService;
+import ch.micha.deployment.controller.auth.db.CachedUserDb;
+import ch.micha.deployment.controller.auth.db.CachedPageDb;
+import ch.micha.deployment.controller.auth.db.UserPageDb;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
 import ch.micha.deployment.controller.auth.error.GlobalErrorHandler;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
@@ -10,7 +13,6 @@ import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
 import io.helidon.common.reactive.Single;
 import io.helidon.config.Config;
-import io.helidon.dbclient.DbClient;
 import io.helidon.media.jsonb.JsonbSupport;
 import io.helidon.media.jsonp.JsonpSupport;
 import io.helidon.webserver.HttpException;
@@ -18,6 +20,9 @@ import io.helidon.webserver.Routing;
 import io.helidon.webserver.WebServer;
 import io.helidon.webserver.cors.CorsSupport;
 import io.helidon.webserver.cors.CrossOriginConfig;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -78,12 +83,24 @@ public final class Main {
                 .build())
             .build();
 
-        Config dbConfig = config.get("db");
-        DbClient dbClient = DbClient.builder(dbConfig).build();
+        String dbUrl = config.get("db.connection.url").asString().get();
+        String dbUser = config.get("db.connection.username").asString().get();
+        String dbPassword = config.get("db.connection.password").asString().get();
+        Connection dbConnection = null;
+        try {
+            dbConnection = DriverManager.getConnection(dbUrl, dbUser, dbPassword);
+        } catch (SQLException e) {
+            LOGGER.log(Level.SEVERE, "could not connect to Db, stopping -- {0} : {1}", new Object[]{ dbUrl, dbUser });
+            System.exit(99);
+        }
+
+        CachedPageDb pageDb = new CachedPageDb(dbConnection);
+        UserPageDb userPageDb = new UserPageDb(dbConnection);
+        CachedUserDb userDb = new CachedUserDb(dbConnection, userPageDb);
 
         GlobalErrorHandler errorHandler = new GlobalErrorHandler();
         RequestLogHandler requestLogHandler = new RequestLogHandler(appConfig);
-        AuthService authService = new AuthService(dbClient, appConfig);
+        AuthService authService = new AuthService(userDb, pageDb, appConfig)    ;
         AuthHandler authHandler = new AuthHandler(authService);
 
         Routing.Builder builder = Routing.builder()
@@ -95,8 +112,8 @@ public final class Main {
             .register("/security", authService)
             .any("/users", authHandler)
             .any("/pages", authHandler)
-            .register("/users", new UserResource(dbClient))
-            .register("/pages", new PageResource(dbClient));
+            .register("/users", new UserResource(userDb))
+            .register("/pages", new PageResource(pageDb, userDb));
 
         return builder.build();
     }

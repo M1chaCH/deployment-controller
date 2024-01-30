@@ -1,3 +1,0 @@
-ch.micha.deployment.controller.auth.entity.user.UserMapperProvider
-ch.micha.deployment.controller.auth.entity.page.PageMapperProvider
-ch.micha.deployment.controller.auth.entity.credentials.CredentialMapperProvider

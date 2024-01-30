@@ -104,7 +104,7 @@
 			location.reload();
 		} else {
 			if(response.status === 401)
-				return location.href = "/login";
+				return location.href = "/login?origin=/admin";
 			throw new Error("failed to add page: " + response.status);
 		}
 	}

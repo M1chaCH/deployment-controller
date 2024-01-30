@@ -1,31 +1,32 @@
 package ch.micha.deployment.controller.auth.resource;
 
 import ch.micha.deployment.controller.auth.EncodingUtil;
-import ch.micha.deployment.controller.auth.entity.user.adduser.AddUser;
-import ch.micha.deployment.controller.auth.entity.user.edituser.EditUser;
-import ch.micha.deployment.controller.auth.entity.user.User;
+import ch.micha.deployment.controller.auth.db.CachedUserDb;
+import ch.micha.deployment.controller.auth.db.UserEntity;
+import ch.micha.deployment.controller.auth.dto.EditUserDto;
+import ch.micha.deployment.controller.auth.dto.UserReadDto;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
+import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.NotFoundException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import io.helidon.common.http.Http.Status;
-import io.helidon.dbclient.DbClient;
-import io.helidon.dbclient.DbRow;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.Routing.Rules;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
-import jakarta.json.JsonObject;
-import java.util.Optional;
+import java.sql.SQLException;
+import java.util.List;
+import java.util.UUID;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class UserResource implements Service{
     private static final Logger LOGGER = Logger.getLogger(UserResource.class.getSimpleName());
 
-    private final DbClient db;
+    private final CachedUserDb db;
 
-    public UserResource(DbClient db) {
+    public UserResource(CachedUserDb db) {
         this.db = db;
     }
 
@@ -33,8 +34,8 @@ public class UserResource implements Service{
     public void update(Rules rules) {
         rules
             .get("/", this::getUsers)
-            .post("/", Handler.create(AddUser.class, this::addUser))
-            .put("/", Handler.create(EditUser.class, this::editUser))
+            .post("/", Handler.create(EditUserDto.class, this::addUser))
+            .put("/", Handler.create(EditUserDto.class, this::editUser))
             .delete("/{id}", this::deleteUser);
     }
 
@@ -42,78 +43,72 @@ public class UserResource implements Service{
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} loading all users", new Object[]{ requestId });
 
-        response.send(db.execute(exec -> exec.namedQuery("select-users"))
-                .map(item -> item.as(JsonObject.class)), JsonObject.class)
-            .thenAccept(sentResponse -> LOGGER.log(Level.FINE, "{0} - successfully loaded all users", requestId))
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            List<UserReadDto> users = db.selectUsers().stream().map(UserEntity::asDto).toList();
+
+            response.send(users)
+                    .thenAccept(sentResponse -> LOGGER.log(Level.FINE, "{0} - successfully loaded all users", requestId))
+                    .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        } catch (SQLException e) {
+            throw new BadRequestException("unhandled SQL exception", "could not load users, db error: " + e.getMessage(), e);
+        }
     }
 
-    private void addUser(ServerRequest request, ServerResponse response, AddUser toAdd) {
+    private void addUser(ServerRequest request, ServerResponse response, EditUserDto toAdd) {
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} adding user {1} as admin:{2}", new Object[]{ requestId, toAdd.mail(), toAdd.admin() });
 
         String salt = EncodingUtil.generateSalt();
         String hashedPassword = EncodingUtil.hashString(toAdd.password(), salt);
-        final User user = new User(-1, toAdd.mail(), hashedPassword, salt, toAdd.admin(), toAdd.viewPrivate(),
-            null, null);
 
-        db.execute(exec -> exec
-                .createNamedInsert("insert-user")
-                .namedParam(user)
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} added {1} user(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            db.insertUser(toAdd.id(), toAdd.mail(), hashedPassword, salt, toAdd.admin(), toAdd.pagesToAllow());
+
+            LOGGER.log(Level.FINE, "{0} added user", new Object[]{ requestId });
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unhandled sql exception", "could not add user, db error: " + e.getMessage(), e);
+        }
     }
 
-    private void editUser(ServerRequest request, ServerResponse response, EditUser toEdit) {
+    private void editUser(ServerRequest request, ServerResponse response, EditUserDto toEdit) {
         final String requestId = RequestLogHandler.parseRequestId(request);
-        LOGGER.log(Level.FINE, "{0} updating user {1}-{2}", new Object[]{ requestId, toEdit.id(), toEdit.mail() });
+        LOGGER.log(Level.FINE, "{0} updating user {1}", new Object[]{ requestId, toEdit.id() });
 
-        Optional<DbRow> userRow = db.execute(exec -> exec
-            .createNamedGet("select-user")
-            .addParam("id", toEdit.id())
-            .execute()).await();
+        UserEntity existingUser;
+        try {
+            existingUser = db.selectUser(toEdit.id());
+        } catch (SQLException e) {
+            throw new NotFoundException("user by id %s was not found".formatted(toEdit.id()), "could not find user");
+        }
 
-        if(userRow.isEmpty())
-            throw new NotFoundException("could not find user with id " + toEdit.id(), "not found");
+        try {
+            String hashedNewPassword = EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
 
-        User user = userRow.get().as(User.class);
-        String newHashedPassword = EncodingUtil.hashString(toEdit.password(), user.salt());
-        db.execute(exec -> exec
-                .createNamedUpdate("update-user")
-                .addParam("id", toEdit.id())
-                .addParam("mail", toEdit.mail())
-                .addParam("password", newHashedPassword)
-                .addParam("admin", toEdit.admin())
-                .addParam("view_private", toEdit.viewPrivate())
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} changed {1} user(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+            db.updateUserWithPages(toEdit.id(), hashedNewPassword, toEdit.admin(), toEdit.pagesToAllow(), toEdit.pagesToDisallow());
+
+            LOGGER.log(Level.FINE, "{0} edited user", new Object[]{ requestId });
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected SQL error", "could not edit user, db error: " + e.getMessage(), e);
+        }
     }
 
     private void deleteUser(ServerRequest request, ServerResponse response) {
         final String requestId = RequestLogHandler.parseRequestId(request);
-        int userId = Integer.parseInt(request.path().param("id"));
+        UUID userId = UUID.fromString(request.path().param("id"));
 
         LOGGER.log(Level.FINE, "{0} deleting user with id {1}", new Object[]{ requestId, userId });
 
-        db.execute(exec -> exec
-                .createNamedDelete("delete-user")
-                .addParam("id", userId)
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} deleted {1} user(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            db.deleteUser(userId);
+            LOGGER.log(Level.FINE, "{0} deleted user", new Object[]{ requestId });
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db error", "user could not be deleted, db error: " + e.getMessage(), e);
+        }
     }
 }

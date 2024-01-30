@@ -124,7 +124,7 @@ public class SendMailProcessor implements Runnable{
                 <li>Source: %s, %s, %s</li>
                 <li>User: %s</li>
                 <li>Admin: %s</li>
-                <li>Private access: %s</li>
+                <li>Private access to: %s</li>
                 <li>Time: %s</li>
             </ul>
             <p>If you did not send this message, please go ahead and shut down our environment.</p>
@@ -140,11 +140,11 @@ public class SendMailProcessor implements Runnable{
         }
 
         return String.format(message,
-            token.getIssuer(), country, city,
-            token.getUserMail(),
-            token.isAdmin(),
-            token.isPrivateAccess(),
-            token.getIssuedAt().toString()
+                             token.getIssuer(), country, city,
+                             token.getUserMail(),
+                             token.isAdmin(),
+                             token.getPrivatePagesAccess().replace(SecurityToken.CLAIM_PRIVATE_ACCESS_DELIMITER, ", "),
+                             token.getIssuedAt().toString()
         );
     }
 }

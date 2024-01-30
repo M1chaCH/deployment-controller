@@ -6,6 +6,7 @@
 	let mail;
 	let password;
 	$: valid = !mail || !password;
+    let origin = buildNextUrl();
 
 	let loginFailed = false;
 
@@ -21,8 +22,14 @@
 
 		loginFailed = !response.ok;
 		if(response.ok)
-			location.href = "/";
+			location.href = origin;
 	}
+
+    function buildNextUrl() {
+        const props = new URLSearchParams(window.location.search);
+        const origin = props.get("origin");
+        return origin ?? "/";
+    }
 </script>
 
 <svelte:head>

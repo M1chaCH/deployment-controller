@@ -1,12 +1,11 @@
 drop table if exists users;
 create table users
 (
-    id serial primary key,
+    id uuid primary key,
     mail varchar(255) not null unique ,
     password varchar(255) not null,
     salt varchar(255) not null,
     admin boolean not null default false,
-    view_private boolean not null default false,
     created_at timestamp not null default current_timestamp,
     last_login timestamp not null default current_timestamp
 );
@@ -18,7 +17,17 @@ create table pages
     url         varchar(255) not null,
     title       varchar(255) not null,
     description varchar(255) not null,
-    private_access boolean not null default true
+    private_page boolean not null default true
+);
+
+drop table if exists user_page;
+create table user_page
+(
+    user_id uuid not null,
+    page_id varchar(250) not null,
+    foreign key (user_id) references users(id) on delete cascade,
+    foreign key (page_id) references pages(id) on delete cascade,
+    primary key (page_id, user_id)
 );
 
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO java;

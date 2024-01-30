@@ -1,34 +1,38 @@
 package ch.micha.deployment.controller.auth.resource;
 
-import ch.micha.deployment.controller.auth.entity.page.Page;
-import ch.micha.deployment.controller.auth.error.AppRequestException;
+import ch.micha.deployment.controller.auth.db.CachedUserDb;
+import ch.micha.deployment.controller.auth.db.CachedPageDb;
+import ch.micha.deployment.controller.auth.db.PageEntity;
+import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import io.helidon.common.http.Http.Status;
-import io.helidon.dbclient.DbClient;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.Routing.Rules;
 import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
-import jakarta.json.JsonObject;
+import java.sql.SQLException;
+import java.util.List;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
 public class PageResource implements Service{
     private static final Logger LOGGER = Logger.getLogger(PageResource.class.getSimpleName());
 
-    private final DbClient db;
+    private final CachedPageDb db;
+    private final CachedUserDb userDb;
 
-    public PageResource(DbClient db) {
+    public PageResource(CachedPageDb db, CachedUserDb userDb) {
         this.db = db;
+        this.userDb = userDb;
     }
 
     @Override
     public void update(Rules rules) {
         rules
             .get("/", this::getPages)
-            .post("/", Handler.create(Page.class, this::createPage))
-            .put("/", Handler.create(Page.class, this::editPage))
+            .post("/", Handler.create(PageEntity.class, this::createPage))
+            .put("/", Handler.create(PageEntity.class, this::editPage))
             .delete("/{id}", this::deletePage);
     }
 
@@ -36,42 +40,46 @@ public class PageResource implements Service{
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} loading all pages", new Object[]{ requestId });
 
-        response.send(db.execute(exec -> exec.namedQuery("select-pages"))
-                .map(item -> item.as(JsonObject.class)), JsonObject.class)
-            .thenAccept(sentResponse -> LOGGER.log(Level.FINE, "{0} - successfully loaded all pages", requestId))
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            List<PageEntity> pages = db.selectPages();
+
+            response.send(pages);
+            LOGGER.log(Level.FINE, "{0} - successfully loaded all pages", requestId);
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db error", "could not load pages", e);
+        }
     }
 
-    private void createPage(ServerRequest request, ServerResponse response, Page toAdd) {
+    private void createPage(ServerRequest request, ServerResponse response, PageEntity toAdd) {
         final String requestId = RequestLogHandler.parseRequestId(request);
-        LOGGER.log(Level.FINE, "{0} adding page at {1}", new Object[]{ requestId, toAdd.url() });
+        LOGGER.log(Level.FINE, "{0} adding page at {1}", new Object[]{ requestId, toAdd.getUrl() });
 
-        db.execute(exec -> exec
-                .createNamedInsert("insert-page")
-                .namedParam(toAdd)
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} added {1} page(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            db.insertPage(toAdd.getId(), toAdd.getUrl(), toAdd.getTitle(), toAdd.getDescription(), toAdd.isPrivateAccess());
+            userDb.invalidateCache();
+
+            LOGGER.log(Level.FINE, "{0} added page", new Object[]{ requestId });
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db exception", "could not insert page, db error: " + e.getMessage(), e);
+        }
     }
 
-    private void editPage(ServerRequest request, ServerResponse response, Page toEdit) {
+    private void editPage(ServerRequest request, ServerResponse response, PageEntity toEdit) {
         final String requestId = RequestLogHandler.parseRequestId(request);
-        LOGGER.log(Level.FINE, "{0} updating page {1}-{2}", new Object[]{ requestId, toEdit.id(), toEdit.url() });
+        LOGGER.log(Level.FINE, "{0} updating page {1}-{2}", new Object[]{ requestId, toEdit.getId(), toEdit.getUrl() });
 
-        db.execute(exec -> exec
-                .createNamedUpdate("update-page")
-                .namedParam(toEdit)
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} changed {1} page(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            db.updatePage(toEdit.getId(), toEdit.getUrl(), toEdit.getTitle(), toEdit.getDescription(), toEdit.isPrivateAccess());
+            userDb.invalidateCache();
+
+            LOGGER.log(Level.FINE, "{0} edited page", new Object[]{ requestId });
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db exception", "could not edit page, db error: " + e.getMessage(), e);
+        }
     }
 
     private void deletePage(ServerRequest request, ServerResponse response) {
@@ -80,15 +88,12 @@ public class PageResource implements Service{
 
         LOGGER.log(Level.FINE, "{0} deleting page with id {1}", new Object[]{ requestId, pageId });
 
-        db.execute(exec -> exec
-                .createNamedDelete("delete-page")
-                .addParam("id", pageId)
-                .execute())
-            .thenAccept(count -> {
-                LOGGER.log(Level.FINE, "{0} deleted {1} page(s)", new Object[]{ requestId, count });
-                response.status(Status.NO_CONTENT_204);
-                response.send();
-            })
-            .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
+        try {
+            db.deletePage(pageId);
+            response.status(Status.NO_CONTENT_204);
+            response.send();
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db error", "could not delete page, db error: " + e.getMessage(), e);
+        }
     }
 }
