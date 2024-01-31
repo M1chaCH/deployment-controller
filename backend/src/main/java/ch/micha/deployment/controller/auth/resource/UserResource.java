@@ -83,8 +83,12 @@ public class UserResource implements Service{
             throw new NotFoundException("user by id %s was not found".formatted(toEdit.id()), "could not find user");
         }
 
+        if(existingUser.isAdmin() && !toEdit.admin() && db.countAdminUsers() <= 1) {
+            throw new BadRequestException("user tried to remove admin rights from the last admin", "one admin required");
+        }
+
         try {
-            String hashedNewPassword = EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
+            String hashedNewPassword = toEdit.password().isBlank() ? existingUser.getPassword() : EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
 
             db.updateUserWithPages(toEdit.id(), hashedNewPassword, toEdit.admin(), toEdit.pagesToAllow(), toEdit.pagesToDisallow());
 
@@ -101,6 +105,17 @@ public class UserResource implements Service{
         UUID userId = UUID.fromString(request.path().param("id"));
 
         LOGGER.log(Level.FINE, "{0} deleting user with id {1}", new Object[]{ requestId, userId });
+
+        UserEntity existingUser;
+        try {
+            existingUser = db.selectUser(userId);
+        } catch (SQLException e) {
+            return;
+        }
+
+        if(existingUser.isAdmin() && db.countAdminUsers() <= 1) {
+            throw new BadRequestException("user tried to delete last admin", "one admin user is required");
+        }
 
         try {
             db.deleteUser(userId);

@@ -26,6 +26,7 @@ public class CachedPageDb {
         PreparedStatement pagesStatement = db.prepareStatement("""
             select id, url, title, description, private_page
             from pages
+            order by pages.id
             """);
         ResultSet pagesResult = pagesStatement.executeQuery();
 

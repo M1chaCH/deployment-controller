@@ -52,8 +52,22 @@
 <style>
 	.login-form {
 		display: flex;
-		flex-flow: row wrap;
-		gap: 10px;
+		flex-flow: column;
+        gap: 10px;
+
+        align-items: center;
+        justify-content: center;
+
+        width: 100%;
 		max-width: 84vw;
+        height: 100%;
+
+        padding-top: 20px;
 	}
+
+    input, button {
+        min-width: 220px;
+        width: 80vw;
+        max-width: 360px;
+    }
 </style>

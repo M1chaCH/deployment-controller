@@ -1,5 +1,5 @@
 <script>
-	import {user} from "./store.js";
+	import {user} from "./store.js"; // TODO redesign and adapt to changes
 
 	export let apiUrl;
 	let darkTheme = localStorage.getItem(THEME_STORAGE_KEY) === DARK_THEME;
@@ -85,7 +85,7 @@
 		<p>Could not load pages: {error.message}</p>
 	{/await}
 </main>
-<div class="theme-selector">
+<div class="options">
 	<button on:click={() => darkTheme = toggleDarkTheme()}>
 		{#if darkTheme}
 			<span class="material-symbols-rounded">light_mode</span>
@@ -93,6 +93,11 @@
 			<span class="material-symbols-rounded">dark_mode</span>
 		{/if}
 	</button>
+    {#if $user}
+        <button on:click={() => darkTheme = toggleDarkTheme()}>
+            <span class="material-symbols-rounded">settings</span>
+        </button>
+    {/if}
 </div>
 
 <style>
@@ -165,32 +170,34 @@
 		font-size: 40px;
 	}
 
-	.theme-selector {
-		display: inline-block;
+	.options {
+		display: flex;
+        flex-flow: row-reverse nowrap;
+
 		position: fixed;
 		right: 5vw;
 		bottom: 5vh;
-		width: 100px;
+		width: auto;
 		height: 60px;
 	}
 
-	.theme-selector button {
+	.options button {
 		all: unset;
 		cursor: pointer;
-		width: 100%;
-		height: 100%;
+		width: 55px;
+		height: 55px;
 		display: flex;
 		justify-content: center;
 		align-items: center;
 		transition: all 250ms ease-out;
 	}
 
-	.theme-selector button:hover {
+	.options button:hover {
 		scale: 1.1;
 		filter: brightness(110%);
 	}
 
-	.theme-selector button .material-symbols-rounded {
+	.options button .material-symbols-rounded {
 		color: var(--michu-tech-foreground);
 		font-size: 42px;
 	}

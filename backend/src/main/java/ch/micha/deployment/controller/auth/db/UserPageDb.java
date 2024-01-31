@@ -33,7 +33,7 @@ public class UserPageDb {
             entity.setTitle(pagesResult.getString("title"));
             entity.setDescription(pagesResult.getString("description"));
             entity.setPrivatePage(pagesResult.getBoolean("private_page"));
-            entity.setHasAccess(pagesResult.getObject("user_id") != null);
+            entity.setHasAccess(!entity.isPrivatePage() || pagesResult.getObject("user_id") != null);
             selectedPages.add(entity);
         }
         pagesResult.close();
@@ -70,6 +70,9 @@ public class UserPageDb {
     }
 
     void deletePagesForUser(UUID userId, String... pages) throws SQLException {
+        if(pages.length == 0)
+            return;
+
         StringBuilder whereBuilder = new StringBuilder();
         for (int i = 0; i < pages.length; i++) {
             whereBuilder.append("user_id = ? and page_id = ?");

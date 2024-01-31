@@ -111,7 +111,11 @@ public class AuthService implements Service {
                 user.getId().toString(),
                 user.getMail(),
                 user.isAdmin(),
-                user.getPages().stream().map(UserPageEntity::getPageId).collect(Collectors.joining(SecurityToken.CLAIM_PRIVATE_ACCESS_DELIMITER)),
+                user.getPages()
+                    .stream()
+                    .filter(p -> p.isPrivatePage() && p.isHasAccess())
+                    .map(UserPageEntity::getPageId)
+                    .collect(Collectors.joining(SecurityToken.CLAIM_PRIVATE_ACCESS_DELIMITER)),
                 Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS))
             );
             String jwtToken = createJwt(token);
@@ -170,6 +174,7 @@ public class AuthService implements Service {
     public void isLoggedIn(ServerRequest request, ServerResponse response) {
         try {
             SecurityToken token = extractTokenCookie(request.headers());
+            validateSecurityToken(request, token);
             UserEntity user = userDb.selectUser(UUID.fromString(token.getUserId()));
 
             if(user == null) {

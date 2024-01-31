@@ -89,7 +89,7 @@ public class CachedUserDb {
 
     public List<UserEntity> selectUsers() throws SQLException {
         PreparedStatement usersStatement = db.prepareStatement("""
-            select * from users
+            select * from users order by users.mail
             """);
         ResultSet usersResult = usersStatement.executeQuery();
 
@@ -152,6 +152,27 @@ public class CachedUserDb {
         userPageDb.deletePagesForUser(userId, deletePageAccess);
 
         selectUser(userId); // just to update cache
+    }
+
+    public long countAdminUsers() {
+        try {
+            PreparedStatement countStatement = db.prepareStatement("""
+                select count(id) as count
+                from users
+                where users.admin = true
+                """);
+
+            ResultSet result = countStatement.executeQuery();
+
+            long count = result.getLong("count");
+
+            result.close();
+            countStatement.close();
+
+            return count;
+        } catch (SQLException e) {
+            return -1L;
+        }
     }
 
     public void deleteUser(UUID userId) throws SQLException {

@@ -10,8 +10,8 @@ FROM nginx:latest AS proxy
 
 ADD nginx.conf /etc/nginx/nginx.conf
 ADD mime.types /etc/nginx/mime.types
-ADD test-automation.html /pages/automation/index.html
-ADD test-portfolio.html /pages/portfolio/index.html
+ADD dev/test-automation.html /pages/automation/index.html
+ADD dev/test-portfolio.html /pages/portfolio/index.html
 
 COPY --from=build-frontend /frontend/public /etc/nginx/html
 
