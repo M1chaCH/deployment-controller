@@ -8,6 +8,7 @@ public record UserReadDto(
     UUID userId,
     String mail,
     boolean admin,
+    boolean active,
     List<UserPageEntity> pages
 ) {
 }

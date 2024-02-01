@@ -6,10 +6,12 @@ import ch.micha.deployment.controller.auth.db.CachedUserDb;
 import ch.micha.deployment.controller.auth.db.PageEntity;
 import ch.micha.deployment.controller.auth.db.UserEntity;
 import ch.micha.deployment.controller.auth.db.UserPageEntity;
+import ch.micha.deployment.controller.auth.dto.ChangeCredentialDto;
 import ch.micha.deployment.controller.auth.dto.CredentialDto;
 import ch.micha.deployment.controller.auth.dto.UserReadDto;
 import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.ForbiddenException;
+import ch.micha.deployment.controller.auth.error.InactiveUserException;
 import ch.micha.deployment.controller.auth.error.UnauthorizedException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import ch.micha.deployment.controller.auth.mail.SendMailDto;
@@ -91,7 +93,9 @@ public class AuthService implements Service {
         rules
             .post("/login", Handler.create(CredentialDto.class, this::login))
             .get("/auth/{" + AUTH_REQUEST_PAGE_PARAM + "}", this::validateTokenCookie)
-            .get("/auth", this::isLoggedIn);
+            .get("/auth", this::isLoggedIn)
+            .put("/change-pw", Handler.create(ChangeCredentialDto.class, this::changePassword))
+            .put("/activate", Handler.create(ChangeCredentialDto.class, this::activateUser));
     }
 
     public void login(ServerRequest request, ServerResponse response, CredentialDto credentialDto) {
@@ -99,7 +103,7 @@ public class AuthService implements Service {
         LOGGER.log(Level.FINE, "{0} trying login for {1}", new Object[]{requestId, credentialDto.mail() });
 
         UserEntity user = userDb.selectUserByMail(credentialDto.mail())
-                                .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s", credentialDto.mail()), "invalid credentials"));
+                                .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s (login, mail not found)", credentialDto.mail()), "invalid credentials"));
 
         String hashedPassword = EncodingUtil.hashString(credentialDto.password(), user.getSalt());
         if(hashedPassword.equals(user.getPassword())) {
@@ -111,6 +115,7 @@ public class AuthService implements Service {
                 user.getId().toString(),
                 user.getMail(),
                 user.isAdmin(),
+                user.isActive(),
                 user.getPages()
                     .stream()
                     .filter(p -> p.isPrivatePage() && p.isHasAccess())
@@ -123,7 +128,7 @@ public class AuthService implements Service {
             String domain = securityConfig.get("domain").asString().get();
             String expires = Date.from(Instant.now().plus(tokenExpireHours, ChronoUnit.HOURS)).toString();
 
-            response.status(Status.NO_CONTENT_204);
+            response.status(Status.OK_200);
             response.addHeader("Set-Cookie", String.format("%s=%s; Path=/; HttpOnly=true; "
                 + "SameSite=Strict; Secure=true; Domain=%s; Expires=%s;",
                 BEARER_COOKIE, jwtToken, domain, expires));
@@ -135,7 +140,7 @@ public class AuthService implements Service {
                 adminMail
             ));
         } else
-            throw new ForbiddenException(String.format("login denied for %s", credentialDto.mail()), "invalid credentials");
+            throw new ForbiddenException(String.format("login denied for %s, (login, wrong pw)", credentialDto.mail()), "invalid credentials");
     }
 
     public void validateTokenCookie(ServerRequest request, ServerResponse response) {
@@ -174,7 +179,7 @@ public class AuthService implements Service {
     public void isLoggedIn(ServerRequest request, ServerResponse response) {
         try {
             SecurityToken token = extractTokenCookie(request.headers());
-            validateSecurityToken(request, token);
+            validateSecurityToken(request, token, true);
             UserEntity user = userDb.selectUser(UUID.fromString(token.getUserId()));
 
             if(user == null) {
@@ -183,9 +188,48 @@ public class AuthService implements Service {
                 return;
             }
 
-            response.send(new UserReadDto(user.getId(), user.getMail(), user.isAdmin(), user.getPages()));
+            response.send(new UserReadDto(user.getId(), user.getMail(), user.isAdmin(), user.isActive(), user.getPages()));
         } catch(SQLException e){
             throw new BadRequestException("unexpected db exception", "could not read user", e);
+        }
+    }
+
+    public void changePassword(ServerRequest request, ServerResponse response, ChangeCredentialDto credentialDto) {
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} changing password for {1}", new Object[]{ requestId, credentialDto.mail() });
+
+        UserEntity user = userDb.selectUserByMail(credentialDto.mail())
+                                .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s (change password mail not found)", credentialDto.mail()), "invalid credentials"));
+        String oldHashedPassword = EncodingUtil.hashString(credentialDto.oldPassword(), user.getSalt());
+
+        if(!oldHashedPassword.equals(user.getPassword()))
+            throw new ForbiddenException(String.format("login denied for %s (change pw, old wrong)", credentialDto.mail()), "invalid credentials");
+
+        String newHashedPassword = EncodingUtil.hashString(credentialDto.password(), user.getSalt());
+        try {
+            userDb.updateUserWithPages(user.getId(), newHashedPassword, user.isAdmin(), user.isActive(), new String[0], new String[0]);
+
+            login(request, response, new CredentialDto(credentialDto.mail(), credentialDto.password()));
+        } catch (SQLException e) {
+            throw new BadRequestException("could not change password", "failed to change password", e);
+        }
+    }
+
+    public void activateUser(ServerRequest request, ServerResponse response, ChangeCredentialDto credentialDto) {
+        // TODO send mail to admin
+        final String requestId = RequestLogHandler.parseRequestId(request);
+        LOGGER.log(Level.FINE, "{0} activating user for {1}", new Object[]{ requestId, credentialDto.mail() });
+
+        UserEntity user = userDb.selectUserByMail(credentialDto.mail())
+                                .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s (activate, mail not found)", credentialDto.mail()), "invalid credentials"));
+        if(user.isActive())
+            throw new BadRequestException("tried to activate already active user", "already active");
+
+        try {
+            userDb.activateUser(user.getId(), true);
+            changePassword(request, response, credentialDto);
+        } catch (SQLException e) {
+            throw new BadRequestException("unexpected db error", "activation failed, db error", e);
         }
     }
 
@@ -197,6 +241,7 @@ public class AuthService implements Service {
             .claim(SecurityToken.CLAIM_USER_ID, securityToken.getUserId())
             .claim(SecurityToken.CLAIM_USER_MAIL, securityToken.getUserMail())
             .claim(SecurityToken.CLAIM_ADMIN, securityToken.isAdmin())
+            .claim(SecurityToken.CLAIM_ACTIVE, securityToken.isActive())
             .claim(SecurityToken.CLAIM_PRIVATE_ACCESS, securityToken.getPrivatePagesAccess())
             .signWith(SIGNATURE_ALGORITHM, key)
             .compact();
@@ -217,6 +262,7 @@ public class AuthService implements Service {
         securityToken.setUserId(claims.get(SecurityToken.CLAIM_USER_ID, String.class));
         securityToken.setUserMail(claims.get(SecurityToken.CLAIM_USER_MAIL, String.class));
         securityToken.setAdmin(claims.get(SecurityToken.CLAIM_ADMIN, Boolean.class));
+        securityToken.setActive(claims.get(SecurityToken.CLAIM_ACTIVE, Boolean.class));
         securityToken.setPrivatePagesAccess(claims.get(SecurityToken.CLAIM_PRIVATE_ACCESS, String.class));
         securityToken.setExpiresAt(claims.getExpiration());
 
@@ -233,6 +279,10 @@ public class AuthService implements Service {
     }
 
     public void validateSecurityToken(ServerRequest request, SecurityToken token) {
+        validateSecurityToken(request, token, false);
+    }
+
+    public void validateSecurityToken(ServerRequest request, SecurityToken token, boolean ignoreUserActive) {
         if(token == null)
             throw new UnauthorizedException(String.format("got request from %s, with no token provided",
                 loadRemoteAddress(request)), "unauthorized");
@@ -244,6 +294,8 @@ public class AuthService implements Service {
         } else if(token.getExpiresAt().before(Date.from(Instant.now()))) {
             throw new UnauthorizedException(String.format("token for %s expired",
                 token.getUserMail()), "token expired");
+        } else if(!ignoreUserActive && !token.isActive()) {
+            throw new InactiveUserException(token.getUserMail());
         }
     }
 
@@ -265,7 +317,7 @@ public class AuthService implements Service {
             String hashedPassword = EncodingUtil.hashString(defaultPassword, salt);
 
             try {
-                userDb.insertUser(UUID.randomUUID(), defaultMail, hashedPassword, salt, true, new String[0]);
+                userDb.insertUser(UUID.randomUUID(), defaultMail, hashedPassword, salt, true, true, new String[0]);
             } catch (SQLException e) {
                 LOGGER.log(Level.WARNING, "could not create default admin", e);
             }

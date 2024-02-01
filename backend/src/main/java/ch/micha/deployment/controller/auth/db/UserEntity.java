@@ -20,6 +20,7 @@ public class UserEntity {
     private String password;
     private String salt;
     private boolean admin;
+    private boolean active;
     private LocalDateTime createdAt;
     private LocalDateTime lastLoginAt;
 
@@ -34,6 +35,7 @@ public class UserEntity {
             getId(),
             getMail(),
             isAdmin(),
+            isActive(),
             getPages()
         );
     }

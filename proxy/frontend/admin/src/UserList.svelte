@@ -25,12 +25,15 @@
                         </p>
                     {/each}
 
-                    <div style="width: 50px; display: flex; align-items: center; justify-content: center;">
+                    <div class="icon-cell">
                         {#if user.admin}
                             <span class="material-symbols-rounded">shield_person</span>
                         {:else }
                             <span class="material-symbols-rounded">person</span>
                         {/if}
+                    </div>
+                    <div class="icon-cell">
+                        <span class="material-symbols-rounded">{user.active ? 'key' : 'key_off'}</span>
                     </div>
 
                     <button type="button" class="icon-button" on:click|preventDefault={() => userIdToDelete = userIdToDelete === user.userId ? undefined : user.userId}>
@@ -60,5 +63,10 @@
 {/await}
 
 <style>
-
+    .icon-cell {
+        height: 50px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
 </style>

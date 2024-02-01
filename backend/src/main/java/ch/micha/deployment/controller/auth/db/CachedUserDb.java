@@ -113,21 +113,27 @@ public class CachedUserDb {
             userResult.getString("password"),
             userResult.getString("salt"),
             userResult.getBoolean("admin"),
+            userResult.getBoolean("active"),
             userResult.getTimestamp("created_at").toLocalDateTime(),
             userResult.getTimestamp("last_login").toLocalDateTime()
         );
     }
 
     public void insertUser(UUID userId, String mail, String password, String salt, boolean admin, String[] pageAccess) throws SQLException {
+        insertUser(userId, mail, password, salt, admin, false, pageAccess);
+    }
+
+    public void insertUser(UUID userId, String mail, String password, String salt, boolean admin, boolean active, String[] pageAccess) throws SQLException {
         PreparedStatement statement = db.prepareStatement("""
-            insert into users (id, mail, password, salt, admin)
-            values (?, ?, ?, ?, ?)
+            insert into users (id, mail, password, salt, admin, active)
+            values (?, ?, ?, ?, ?, ?)
             """);
         statement.setObject(1, userId);
         statement.setString(2, mail);
         statement.setString(3, password);
         statement.setString(4, salt);
         statement.setBoolean(5, admin);
+        statement.setBoolean(6, active);
         statement.execute();
         statement.close();
 
@@ -136,14 +142,15 @@ public class CachedUserDb {
         selectUser(userId); // just to update cache
     }
 
-    public void updateUserWithPages(UUID userId, String password, boolean admin, String[] addPageAccess, String[] deletePageAccess) throws SQLException {
+    public void updateUserWithPages(UUID userId, String password, boolean admin, boolean active, String[] addPageAccess, String[] deletePageAccess) throws SQLException {
         PreparedStatement statement = db.prepareStatement("""
-            update users set password = ?, admin = ?
+            update users set password = ?, admin = ?, active = ?
             where id = ?
             """);
         statement.setString(1, password);
         statement.setBoolean(2, admin);
-        statement.setObject(3, userId);
+        statement.setBoolean(3, active);
+        statement.setObject(4, userId);
 
         statement.executeUpdate();
         statement.close();
@@ -151,6 +158,22 @@ public class CachedUserDb {
         userPageDb.insertPagesForUser(userId, addPageAccess);
         userPageDb.deletePagesForUser(userId, deletePageAccess);
 
+        cache.remove(userId);
+        selectUser(userId); // just to update cache
+    }
+
+    public void activateUser(UUID userId, boolean active) throws SQLException {
+        PreparedStatement statement = db.prepareStatement("""
+            update users set active = ?
+            where id = ?
+            """);
+        statement.setBoolean(1, active);
+        statement.setObject(2, userId);
+
+        statement.executeUpdate();
+        statement.close();
+
+        cache.remove(userId);
         selectUser(userId); // just to update cache
     }
 

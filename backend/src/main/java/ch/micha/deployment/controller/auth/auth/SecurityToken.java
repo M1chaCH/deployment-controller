@@ -14,6 +14,7 @@ public class SecurityToken {
     public static final String CLAIM_USER_ID = "user_id";
     public static final String CLAIM_USER_MAIL = "user_mail";
     public static final String CLAIM_ADMIN = "admin";
+    public static final String CLAIM_ACTIVE = "active";
     public static final String CLAIM_PRIVATE_ACCESS = "private_access";
     public static final String CLAIM_PRIVATE_ACCESS_DELIMITER = "&&";
 
@@ -22,6 +23,7 @@ public class SecurityToken {
     private String userId;
     private String userMail;
     private boolean admin;
+    private boolean active;
     private String privatePagesAccess;
     private Date expiresAt;
 }

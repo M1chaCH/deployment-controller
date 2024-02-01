@@ -1,10 +1,15 @@
 <script>
-	import {user} from "./store.js";
+	import {user} from "./store.js"; // TODO if user inactive redirect to onboarding
     import {onMount} from 'svelte';
+    import ChangePassword from '../../public/ChangePassword.svelte';
+    import { fly } from 'svelte/transition';
 
 	export let apiUrl;
 	let darkTheme = localStorage.getItem(THEME_STORAGE_KEY) === DARK_THEME;
     let pages = [];
+    $: onboardingLink = `/onboarding?mail=${$user?.mail}`;
+    let changePasswordOpen = false;
+    let changePasswordError = "";
 
     onMount(async () => {
         const loggedInUser = await isLoggedIn();
@@ -37,6 +42,24 @@
 			throw new Error("failed to check login status: " + response.status);
 		}
 	}
+
+    async function sendChangePassword(data) {
+        const response = await fetch(`${apiUrl}/security/change-pw`, {
+            method: 'PUT',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ mail: data.mail, oldPassword: data.oldPassword, password: data.password }),
+            credentials: 'include' // Include cookies in subsequent requests
+        });
+
+        if(response.ok) {
+            changePasswordError = "";
+            location.href = '/';
+        } else {
+            changePasswordError = "Could not change password: " + (await response.text());
+        }
+    }
 </script>
 
 <svelte:head>
@@ -65,9 +88,16 @@
 		<span class="small-text">Some might me locked, you need to have special access for these.</span>
 	</p>
 
+    {#if !$user?.active}
+        <p>
+            Your account isn't yet active. You need to complete the omboarding steps
+            <a href={onboardingLink} style="color: var(--michu-tech-warn);">here</a>!
+        </p>
+    {/if}
+
     <div class="pages">
         {#each pages as page}
-            <a class="page" class:disabled-page={page.privatePage && (!$user || !page.hasAccess)} href={page.url}>
+            <a class="page" class:disabled-page={page.privatePage && (!$user?.active || !page.hasAccess)} href={page.url}>
                 <h3 class="page-title">
                     {page.title}
                     <span class="small-text">{page.url}</span>
@@ -76,7 +106,7 @@
                 <span style="display: none">{page.privatePage}</span>
 
                 {#if page.privatePage}
-                    {#if $user && page.hasAccess}
+                    {#if $user?.active && page.hasAccess}
                         <span class="material-symbols-rounded lock">lock_open</span>
                     {:else }
                         <span style="color: var(--michu-tech-warn);" class="material-symbols-rounded lock">encrypted</span>
@@ -94,12 +124,20 @@
 			<span class="material-symbols-rounded">dark_mode</span>
 		{/if}
 	</button>
-    {#if $user}
-        <button on:click={() => darkTheme = toggleDarkTheme()}>
+    {#if $user?.active}
+        <button on:click={() => changePasswordOpen = !changePasswordOpen}>
             <span class="material-symbols-rounded">settings</span>
         </button>
     {/if}
 </div>
+
+{#if changePasswordOpen}
+    <div transition:fly="{{delay: 0, duration: 250, y: 50 }}" class="bottom-sheet-container">
+        <div class="bottom-sheet">
+            <ChangePassword mail={$user?.mail} bind:errorText={changePasswordError} on:cancel={() => changePasswordOpen = false} on:save={(e) => sendChangePassword(e.detail)} />
+        </div>
+    </div>
+{/if}
 
 <style>
 	.logo-banner {
@@ -218,4 +256,29 @@
 		color: var(--michu-tech-foreground);
 		font-size: 42px;
 	}
+
+    .bottom-sheet-container {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        top: 0;
+
+        display: flex;
+        flex-flow: column-reverse;
+
+        background-color: color-mix(in srgb, var(--michu-tech-background) 50%, transparent);
+    }
+
+    .bottom-sheet {
+        pointer-events: fill;
+        width: clamp(200px, 85vw, 450px);
+        margin: 0 auto;
+        box-sizing: border-box;
+        padding: 20px;
+        border-top-left-radius: 12px;
+        border-top-right-radius: 12px;
+
+        background-color: color-mix(in srgb, var(--michu-tech-background) 92%, var(--michu-tech-foreground));
+    }
 </style>

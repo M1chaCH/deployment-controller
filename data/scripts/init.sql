@@ -7,7 +7,8 @@ create table users
     salt varchar(255) not null,
     admin boolean not null default false,
     created_at timestamp not null default current_timestamp,
-    last_login timestamp not null default current_timestamp
+    last_login timestamp not null default current_timestamp,
+    active boolean not null default false
 );
 
 drop table if exists pages;

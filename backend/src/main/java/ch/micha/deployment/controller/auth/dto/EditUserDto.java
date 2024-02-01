@@ -9,6 +9,7 @@ public record EditUserDto(
     String mail,
     String password,
     boolean admin,
+    boolean active,
     String[] pagesToAllow,
     String[] pagesToDisallow
 ) { }

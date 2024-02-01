@@ -62,7 +62,7 @@ public class PageResource implements Service{
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unexpected db exception", "could not insert page, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unexpected db exception", "could not insert page, db error", e);
         }
     }
 
@@ -78,7 +78,7 @@ public class PageResource implements Service{
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unexpected db exception", "could not edit page, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unexpected db exception", "could not edit page, db error", e);
         }
     }
 
@@ -93,7 +93,7 @@ public class PageResource implements Service{
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unexpected db error", "could not delete page, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unexpected db error", "could not delete page, db error", e);
         }
     }
 }

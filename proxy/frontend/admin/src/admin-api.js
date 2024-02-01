@@ -25,13 +25,13 @@ export async function addUser(apiUrl, id, mail, password, admin, pagesToAllow) {
   }
 }
 
-export async function editUser(apiUrl, id, password, admin, pagesToAllow, pagesToDisallow) {
+export async function editUser(apiUrl, id, password, admin, active, pagesToAllow, pagesToDisallow) {
   const response = await fetch(`${apiUrl}/users`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, mail: null, password, admin, pagesToAllow, pagesToDisallow }),
+    body: JSON.stringify({ id, mail: null, password, admin, active, pagesToAllow, pagesToDisallow }),
     credentials: 'include' // Include cookies in subsequent requests
   });
 

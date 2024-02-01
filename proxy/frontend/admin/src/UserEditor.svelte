@@ -13,6 +13,7 @@
     let mail = user?.mail;
     let password;
     let admin = user ? user.admin : false;
+    let active = user ? user.active : false;
     let pageAccessToAdd = [];
     let pageAccessToRemove = [];
     $: userInvalid = !userId || !mail || create && !password;
@@ -27,7 +28,7 @@
         if(create) {
             addUser(apiUrl, userId, mail, password, admin, []);
         } else {
-            editUser(apiUrl, userId, password, admin, pageAccessToAdd, pageAccessToRemove);
+            editUser(apiUrl, userId, password, admin, active, pageAccessToAdd, pageAccessToRemove);
         }
     }
 
@@ -65,6 +66,11 @@
     </div>
 
     {#if !create}
+        <div class="labeled-input">
+            <label for="user-active">Active</label>
+            <input id="user-active" type="checkbox" class="checkbox" bind:checked={active}/>
+        </div>
+
         {#each pagesToEdit as page}
             <div class="labeled-input" style="min-width: 100px;">
                 <label>{page.url}</label>

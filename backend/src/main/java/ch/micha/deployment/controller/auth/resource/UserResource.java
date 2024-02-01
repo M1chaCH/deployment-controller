@@ -50,11 +50,12 @@ public class UserResource implements Service{
                     .thenAccept(sentResponse -> LOGGER.log(Level.FINE, "{0} - successfully loaded all users", requestId))
                     .exceptionally(t -> AppRequestException.respondFitting(response, requestId, t));
         } catch (SQLException e) {
-            throw new BadRequestException("unhandled SQL exception", "could not load users, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unhandled SQL exception", "could not load users, db error", e);
         }
     }
 
     private void addUser(ServerRequest request, ServerResponse response, EditUserDto toAdd) {
+        // TODO send mail to new user to inform him about hiss luck (;
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} adding user {1} as admin:{2}", new Object[]{ requestId, toAdd.mail(), toAdd.admin() });
 
@@ -68,7 +69,7 @@ public class UserResource implements Service{
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unhandled sql exception", "could not add user, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unhandled sql exception", "could not add user, db error", e);
         }
     }
 
@@ -83,20 +84,20 @@ public class UserResource implements Service{
             throw new NotFoundException("user by id %s was not found".formatted(toEdit.id()), "could not find user");
         }
 
-        if(existingUser.isAdmin() && !toEdit.admin() && db.countAdminUsers() <= 1) {
+        if(existingUser.isAdmin() && (!toEdit.admin() || !toEdit.active()) && db.countAdminUsers() <= 1) {
             throw new BadRequestException("user tried to remove admin rights from the last admin", "one admin required");
         }
 
         try {
             String hashedNewPassword = toEdit.password().isBlank() ? existingUser.getPassword() : EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
 
-            db.updateUserWithPages(toEdit.id(), hashedNewPassword, toEdit.admin(), toEdit.pagesToAllow(), toEdit.pagesToDisallow());
+            db.updateUserWithPages(toEdit.id(), hashedNewPassword, toEdit.admin(), toEdit.active(), toEdit.pagesToAllow(), toEdit.pagesToDisallow());
 
             LOGGER.log(Level.FINE, "{0} edited user", new Object[]{ requestId });
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unexpected SQL error", "could not edit user, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unexpected SQL error", "could not edit user, db error", e);
         }
     }
 
@@ -123,7 +124,7 @@ public class UserResource implements Service{
             response.status(Status.NO_CONTENT_204);
             response.send();
         } catch (SQLException e) {
-            throw new BadRequestException("unexpected db error", "user could not be deleted, db error: " + e.getMessage(), e);
+            throw new BadRequestException("unexpected db error", "user could not be deleted, db error", e);
         }
     }
 }

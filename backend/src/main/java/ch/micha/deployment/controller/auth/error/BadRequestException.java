@@ -9,6 +9,6 @@ public class BadRequestException extends AppRequestException{
     }
 
     public BadRequestException(String serverMessage, String clientMessage, Throwable cause) {
-        super(serverMessage, clientMessage, Status.BAD_REQUEST_400, cause, false);
+        super(serverMessage, clientMessage, Status.BAD_REQUEST_400, cause, true);
     }
 }
