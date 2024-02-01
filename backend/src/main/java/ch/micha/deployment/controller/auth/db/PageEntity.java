@@ -14,5 +14,5 @@ public class PageEntity {
     private String url;
     private String title;
     private String description;
-    private boolean privateAccess;
+    private boolean privatePage;
 }

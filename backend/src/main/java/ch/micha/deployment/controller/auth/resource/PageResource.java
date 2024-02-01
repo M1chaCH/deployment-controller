@@ -55,7 +55,7 @@ public class PageResource implements Service{
         LOGGER.log(Level.FINE, "{0} adding page at {1}", new Object[]{ requestId, toAdd.getUrl() });
 
         try {
-            db.insertPage(toAdd.getId(), toAdd.getUrl(), toAdd.getTitle(), toAdd.getDescription(), toAdd.isPrivateAccess());
+            db.insertPage(toAdd.getId(), toAdd.getUrl(), toAdd.getTitle(), toAdd.getDescription(), toAdd.isPrivatePage());
             userDb.invalidateCache();
 
             LOGGER.log(Level.FINE, "{0} added page", new Object[]{ requestId });
@@ -71,7 +71,7 @@ public class PageResource implements Service{
         LOGGER.log(Level.FINE, "{0} updating page {1}-{2}", new Object[]{ requestId, toEdit.getId(), toEdit.getUrl() });
 
         try {
-            db.updatePage(toEdit.getId(), toEdit.getUrl(), toEdit.getTitle(), toEdit.getDescription(), toEdit.isPrivateAccess());
+            db.updatePage(toEdit.getId(), toEdit.getUrl(), toEdit.getTitle(), toEdit.getDescription(), toEdit.isPrivatePage());
             userDb.invalidateCache();
 
             LOGGER.log(Level.FINE, "{0} edited page", new Object[]{ requestId });

@@ -1,15 +1,21 @@
 <script>
-	import {user} from "./store.js"; // TODO redesign and adapt to changes
+	import {user} from "./store.js";
+    import {onMount} from 'svelte';
 
 	export let apiUrl;
 	let darkTheme = localStorage.getItem(THEME_STORAGE_KEY) === DARK_THEME;
+    let pages = [];
 
-	isLoggedIn()
-	.then(loggedInUser => user.set(loggedInUser))
-	.catch(_ => console.log("failed to check login status"));
+    onMount(async () => {
+        const loggedInUser = await isLoggedIn();
+        if(loggedInUser) {
+            user.set(loggedInUser);
+            pages = loggedInUser.pages;
+        } else {
+            pages = await getPages();
+        }
+    });
 
-	let viewPrivate = false;
-	user.subscribe(u => viewPrivate = u?.viewPrivate || false);
 
 	async function getPages() {
 		const response = await fetch(`${apiUrl}/pages`);
@@ -58,32 +64,27 @@
 		<br />
 		<span class="small-text">Some might me locked, you need to have special access for these.</span>
 	</p>
-	{#await getPages()}
-		<p>Loading pages ...</p>
-	{:then pages}
-		<div class="pages">
-			{#each pages as page}
-				<a class="page" class:disabled-page={!viewPrivate && page.private_access} href={page.url}>
-					<h3>
-						{page.title}
-						<span class="small-text">{page.url}</span>
-					</h3>
-					<p class="text" style="">{page.description}</p>
-					<span style="display: none">{page.private_access}</span>
 
-					{#if page.private_access}
-						{#if viewPrivate}
-							<span class="material-symbols-rounded lock">lock_open</span>
-						{:else }
-							<span class="material-symbols-rounded lock">encrypted</span>
-						{/if}
-					{/if}
-				</a>
-			{/each}
-		</div>
-	{:catch error}
-		<p>Could not load pages: {error.message}</p>
-	{/await}
+    <div class="pages">
+        {#each pages as page}
+            <a class="page" class:disabled-page={page.privatePage && (!$user || !page.hasAccess)} href={page.url}>
+                <h3 class="page-title">
+                    {page.title}
+                    <span class="small-text">{page.url}</span>
+                </h3>
+                <p class="text" style="">{page.description}</p>
+                <span style="display: none">{page.privatePage}</span>
+
+                {#if page.privatePage}
+                    {#if $user && page.hasAccess}
+                        <span class="material-symbols-rounded lock">lock_open</span>
+                    {:else }
+                        <span style="color: var(--michu-tech-warn);" class="material-symbols-rounded lock">encrypted</span>
+                    {/if}
+                {/if}
+            </a>
+        {/each}
+    </div>
 </main>
 <div class="options">
 	<button on:click={() => darkTheme = toggleDarkTheme()}>
@@ -128,6 +129,7 @@
 		display: flex;
 		flex-flow: row wrap;
 		gap: 20px;
+        justify-content: center;
 	}
 
 	.pages .page {
@@ -135,32 +137,39 @@
 		position: relative;
 
 		padding: 20px;
-		width: 350px;
-		background-color: color-mix(in srgb, var(--michu-tech-primary) 75%, var(--michu-tech-background));
-		box-shadow: inset 0 0 0 4px var(--michu-tech-accent);
-		border-radius: 7px;
+		flex: 1;
+        min-width: 220px;
+        max-width: 600px;
+        border-bottom-color: var(--michu-tech-foreground);
+        border-bottom-style: dashed;
+        border-bottom-width: 2px;
 
 		cursor: pointer;
 		transition: all 200ms ease-out;
+
+        box-sizing: border-box;
 	}
+
+    .page-title,
+    .page-title span {
+        transition: all 200ms ease-out;
+    }
 
 	.disabled-page {
 		pointer-events: none !important;
-	    background-color: color-mix(in srgb, var(--michu-tech-primary) 25%, transparent) !important;
-	    box-shadow: inset 0 0 0 4px color-mix(in srgb, var(--michu-tech-accent) 60%, var(--michu-tech-background)) !important;
 	}
 
 	.pages .page:hover {
-		background-color: var(--michu-tech-accent);
-
-		box-shadow: inset -10px -10px 0 10px color-mix(in srgb, var(--michu-tech-primary) 75%, var(--michu-tech-background));
+        border-bottom-color: var(--michu-tech-accent);
+        border-bottom-style: dashed;
+        border-bottom-width: 4px;
+        scale: 1.02;
 	}
 
-	.pages .page:hover h3,
-	.pages .page:hover span,
-	.pages .page:hover p {
-		color: var(--michu-tech-background);
-	}
+    .pages .page:hover .page-title,
+    .pages .page:hover .page-title span {
+        color: var(--michu-tech-accent);
+    }
 
 	.lock {
 		position: absolute;
@@ -192,10 +201,18 @@
 		transition: all 250ms ease-out;
 	}
 
+    .options button span {
+        transition: color 250ms ease-out;
+    }
+
 	.options button:hover {
 		scale: 1.1;
 		filter: brightness(110%);
 	}
+
+    .options button:hover span {
+        color: var(--michu-tech-accent);
+    }
 
 	.options button .material-symbols-rounded {
 		color: var(--michu-tech-foreground);

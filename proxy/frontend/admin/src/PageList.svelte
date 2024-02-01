@@ -23,7 +23,7 @@
                     <p class="cell" style="flex: 2;">{page.description}</p>
 
                     <div style="width: 50px; display: flex; align-items: center; justify-content: center;">
-                        {#if page.privateAccess}
+                        {#if page.privatePage}
                             <span class="material-symbols-rounded">encrypted</span>
                         {:else }
                             <span class="material-symbols-rounded">lock_open</span>

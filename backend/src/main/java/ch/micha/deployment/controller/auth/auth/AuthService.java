@@ -151,7 +151,7 @@ public class AuthService implements Service {
         PageEntity page = pageDb.selectPage(pageIdParam)
                                 .orElseThrow(() -> new ForbiddenException(String.format("access to unknown page denied, from: %s", loadRemoteAddress(request)), "not allowed"));
 
-        if(!page.isPrivateAccess()) {
+        if(!page.isPrivatePage()) {
             LOGGER.log(Level.FINE, "{0} access to public page granted: {1}",
                 new Object[]{ requestId, page.getUrl() });
             response.status(Status.OK_200);

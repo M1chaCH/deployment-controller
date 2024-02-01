@@ -94,9 +94,9 @@ public final class Main {
             System.exit(99);
         }
 
-        CachedPageDb pageDb = new CachedPageDb(dbConnection);
         UserPageDb userPageDb = new UserPageDb(dbConnection);
         CachedUserDb userDb = new CachedUserDb(dbConnection, userPageDb);
+        CachedPageDb pageDb = new CachedPageDb(dbConnection, userDb);
 
         GlobalErrorHandler errorHandler = new GlobalErrorHandler();
         RequestLogHandler requestLogHandler = new RequestLogHandler(appConfig);

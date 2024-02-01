@@ -17,9 +17,11 @@ public class CachedPageDb {
 
     protected final Connection db;
     protected final Map<String, PageEntity> cache = new HashMap<>();
+    protected final CachedUserDb userDb;
 
-    public CachedPageDb(Connection db) {
+    public CachedPageDb(Connection db, CachedUserDb userDb) {
         this.db = db;
+        this.userDb = userDb;
     }
 
     public List<PageEntity> selectPages() throws SQLException {
@@ -96,6 +98,7 @@ public class CachedPageDb {
         insertPage.close();
 
         cache.put(pageId, new PageEntity(pageId, url, title, description, privateAccess));
+        userDb.invalidateCache();
     }
 
     public void updatePage(String pageId, String url, String title, String description, boolean privateAccess) throws SQLException {
@@ -113,6 +116,7 @@ public class CachedPageDb {
         updatePage.close();
 
         cache.put(pageId, new PageEntity(pageId, url, title, description, privateAccess));
+        userDb.invalidateCache();
     }
 
     public void deletePage(String pageId) throws SQLException {
@@ -125,5 +129,6 @@ public class CachedPageDb {
         deletePage.close();
 
         cache.remove(pageId);
+        userDb.invalidateCache();
     }
 }

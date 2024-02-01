@@ -68,13 +68,13 @@ export async function getPages(apiUrl) {
   return JSON.parse(stringResponse);
 }
 
-export async function addPage(apiUrl, id, url, title, description, privateAccess) {
+export async function addPage(apiUrl, id, url, title, description, privatePage) {
   const response = await fetch(`${apiUrl}/pages`, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, url, title, description, privateAccess }),
+    body: JSON.stringify({ id, url, title, description, privatePage }),
     credentials: 'include' // Include cookies in subsequent requests
   });
 
@@ -87,13 +87,13 @@ export async function addPage(apiUrl, id, url, title, description, privateAccess
   }
 }
 
-export async function editPage(apiUrl, id, url, title, description, privateAccess) {
+export async function editPage(apiUrl, id, url, title, description, privatePage) {
   const response = await fetch(`${apiUrl}/pages`, {
     method: 'PUT',
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, url, title, description, privateAccess }),
+    body: JSON.stringify({ id, url, title, description, privatePage }),
     credentials: 'include' // Include cookies in subsequent requests
   });
 

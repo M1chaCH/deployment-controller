@@ -20,7 +20,8 @@ public class UserPageDb {
         PreparedStatement pagesStatement = db.prepareStatement("""
             select p.id, url, title, description, private_page, up.user_id
             from pages as p
-            left join public.user_page up on ? = up.user_id
+            left join public.user_page up on ? = up.user_id and p.id = up.page_id
+            order by p.id
             """);
         pagesStatement.setObject(1, userId);
         ResultSet pagesResult = pagesStatement.executeQuery();

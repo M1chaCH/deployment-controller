@@ -14,7 +14,7 @@
     let pageTitel = page?.title;
     let pageDesc = page?.description;
     let pageUrl = page?.url;
-    let pagePrivate = page ? page.privateAccess : true;
+    let pagePrivate = page ? page.privatePage : true;
     $: invalidPage = !pageTitel || !pageDesc || !pageUrl || !pageUrl.startsWith("/");
     $: pageId = pageId?.toLowerCase();
 
