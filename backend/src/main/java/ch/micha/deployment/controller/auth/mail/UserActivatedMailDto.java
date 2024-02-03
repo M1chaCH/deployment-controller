@@ -9,14 +9,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Getter
 @Setter
-public class SendMailDto {
-    private Type mailType;
-    private Object data;
-    private String recipient;
-
-    public enum Type {
-        LOGIN_GRANT,
-        PAGE_INVITATION,
-        USER_ACTIVATED,
-    }
+public class UserActivatedMailDto {
+    private String userMail;
+    private String time;
 }

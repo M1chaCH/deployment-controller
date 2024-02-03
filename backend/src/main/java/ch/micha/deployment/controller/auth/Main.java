@@ -8,6 +8,8 @@ import ch.micha.deployment.controller.auth.db.UserPageDb;
 import ch.micha.deployment.controller.auth.error.AppRequestException;
 import ch.micha.deployment.controller.auth.error.GlobalErrorHandler;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
+import ch.micha.deployment.controller.auth.mail.SendMailDto;
+import ch.micha.deployment.controller.auth.mail.SendMailProcessor;
 import ch.micha.deployment.controller.auth.resource.PageResource;
 import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
@@ -23,6 +25,8 @@ import io.helidon.webserver.cors.CrossOriginConfig;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.SQLException;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -98,9 +102,10 @@ public final class Main {
         CachedUserDb userDb = new CachedUserDb(dbConnection, userPageDb);
         CachedPageDb pageDb = new CachedPageDb(dbConnection, userDb);
 
+        BlockingQueue<SendMailDto> sendMailQueue = prepareMailQueue(appConfig);
         GlobalErrorHandler errorHandler = new GlobalErrorHandler();
         RequestLogHandler requestLogHandler = new RequestLogHandler(appConfig);
-        AuthService authService = new AuthService(userDb, pageDb, appConfig)    ;
+        AuthService authService = new AuthService(userDb, pageDb, appConfig, sendMailQueue);
         AuthHandler authHandler = new AuthHandler(authService);
 
         Routing.Builder builder = Routing.builder()
@@ -112,9 +117,17 @@ public final class Main {
             .register("/security", authService)
             .any("/users", authHandler)
             .any("/pages", authHandler)
-            .register("/users", new UserResource(userDb))
+            .register("/users", new UserResource(userDb, sendMailQueue, appConfig.get("security")))
             .register("/pages", new PageResource(pageDb, userDb));
 
         return builder.build();
+    }
+
+    private static BlockingQueue<SendMailDto> prepareMailQueue(Config appConfig) {
+        BlockingQueue<SendMailDto> sendMailQueue = new LinkedBlockingQueue<>();
+        Thread sendMailThread = new Thread(new SendMailProcessor(sendMailQueue, appConfig));
+        sendMailThread.setName("mail-sender");
+        sendMailThread.start();
+        return sendMailQueue;
     }
 }

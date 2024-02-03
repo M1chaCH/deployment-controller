@@ -9,7 +9,11 @@ import ch.micha.deployment.controller.auth.error.AppRequestException;
 import ch.micha.deployment.controller.auth.error.BadRequestException;
 import ch.micha.deployment.controller.auth.error.NotFoundException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
+import ch.micha.deployment.controller.auth.mail.PageInvitationMailDto;
+import ch.micha.deployment.controller.auth.mail.SendMailDto;
+import ch.micha.deployment.controller.auth.mail.SendMailDto.Type;
 import io.helidon.common.http.Http.Status;
+import io.helidon.config.Config;
 import io.helidon.webserver.Handler;
 import io.helidon.webserver.Routing.Rules;
 import io.helidon.webserver.ServerRequest;
@@ -18,6 +22,7 @@ import io.helidon.webserver.Service;
 import java.sql.SQLException;
 import java.util.List;
 import java.util.UUID;
+import java.util.concurrent.BlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -25,9 +30,13 @@ public class UserResource implements Service{
     private static final Logger LOGGER = Logger.getLogger(UserResource.class.getSimpleName());
 
     private final CachedUserDb db;
+    private final BlockingQueue<SendMailDto> sendMailQueue;
+    private final Config securityConfig;
 
-    public UserResource(CachedUserDb db) {
+    public UserResource(CachedUserDb db, BlockingQueue<SendMailDto> sendMailQueue, Config securityConfig) {
         this.db = db;
+        this.sendMailQueue = sendMailQueue;
+        this.securityConfig = securityConfig;
     }
 
     @Override
@@ -55,7 +64,6 @@ public class UserResource implements Service{
     }
 
     private void addUser(ServerRequest request, ServerResponse response, EditUserDto toAdd) {
-        // TODO send mail to new user to inform him about hiss luck (;
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} adding user {1} as admin:{2}", new Object[]{ requestId, toAdd.mail(), toAdd.admin() });
 
@@ -64,6 +72,7 @@ public class UserResource implements Service{
 
         try {
             db.insertUser(toAdd.id(), toAdd.mail(), hashedPassword, salt, toAdd.admin(), toAdd.pagesToAllow());
+            sendMailIfPagesAdded(toAdd.pagesToAllow(), toAdd.mail(), securityConfig);
 
             LOGGER.log(Level.FINE, "{0} added user", new Object[]{ requestId });
             response.status(Status.NO_CONTENT_204);
@@ -89,10 +98,11 @@ public class UserResource implements Service{
         }
 
         try {
-            String hashedNewPassword = toEdit.password().isBlank() ? existingUser.getPassword() : EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
+            String hashedNewPassword = toEdit.password() == null || toEdit.password().isBlank() ? existingUser.getPassword() : EncodingUtil.hashString(toEdit.password(), existingUser.getSalt());
 
             db.updateUserWithPages(toEdit.id(), hashedNewPassword, toEdit.admin(), toEdit.active(), toEdit.pagesToAllow(), toEdit.pagesToDisallow());
 
+            sendMailIfPagesAdded(toEdit.pagesToAllow(), existingUser.getMail(), securityConfig);
             LOGGER.log(Level.FINE, "{0} edited user", new Object[]{ requestId });
             response.status(Status.NO_CONTENT_204);
             response.send();
@@ -126,5 +136,17 @@ public class UserResource implements Service{
         } catch (SQLException e) {
             throw new BadRequestException("unexpected db error", "user could not be deleted, db error", e);
         }
+    }
+
+    private void sendMailIfPagesAdded(String[] pages, String userMail, Config securityConfig) {
+        if(pages == null || pages.length < 1)
+            return;
+
+        String url = "%s/onboarding?mail=%s&pages=%s".formatted(securityConfig.get("frontend").asString().get(),
+                                                                userMail,
+                                                                String.join(",", pages));
+        sendMailQueue.add(new SendMailDto(Type.PAGE_INVITATION,
+                                          new PageInvitationMailDto(userMail, pages, url),
+                                          userMail));
     }
 }

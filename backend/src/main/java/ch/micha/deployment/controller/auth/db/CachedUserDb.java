@@ -186,7 +186,7 @@ public class CachedUserDb {
                 """);
 
             ResultSet result = countStatement.executeQuery();
-
+            result.next();
             long count = result.getLong("count");
 
             result.close();

@@ -12,7 +12,7 @@ export async function addUser(apiUrl, id, mail, password, admin, pagesToAllow) {
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, mail, password, admin, pagesToAllow, pagesToDisallow: [] }),
+    body: JSON.stringify({ id, mail, password, admin, active: false, pagesToAllow, pagesToDisallow: [] }),
     credentials: 'include' // Include cookies in subsequent requests
   });
 
@@ -31,7 +31,7 @@ export async function editUser(apiUrl, id, password, admin, active, pagesToAllow
     headers: {
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ id, mail: null, password, admin, active, pagesToAllow, pagesToDisallow }),
+    body: JSON.stringify({ id, mail: null, password: password ?? null, admin, active, pagesToAllow, pagesToDisallow }),
     credentials: 'include' // Include cookies in subsequent requests
   });
 

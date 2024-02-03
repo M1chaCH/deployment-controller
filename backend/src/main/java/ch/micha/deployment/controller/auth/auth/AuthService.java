@@ -16,7 +16,7 @@ import ch.micha.deployment.controller.auth.error.UnauthorizedException;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import ch.micha.deployment.controller.auth.mail.SendMailDto;
 import ch.micha.deployment.controller.auth.mail.SendMailDto.Type;
-import ch.micha.deployment.controller.auth.mail.SendMailProcessor;
+import ch.micha.deployment.controller.auth.mail.UserActivatedMailDto;
 import io.helidon.common.http.Http.Status;
 import io.helidon.config.Config;
 import io.helidon.webserver.Handler;
@@ -32,13 +32,14 @@ import io.jsonwebtoken.SignatureAlgorithm;
 import java.security.Key;
 import java.sql.SQLException;
 import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
 import java.util.Base64;
 import java.util.Date;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Collectors;
@@ -55,7 +56,7 @@ public class AuthService implements Service {
     private final Config securityConfig;
     private final Key key;
     private final long tokenExpireHours;
-    private final BlockingQueue<SendMailDto> sendMailQueue = new LinkedBlockingQueue<>();
+    private final BlockingQueue<SendMailDto> sendMailQueue;
     private final String adminMail;
 
     public static String loadRemoteAddress(ServerRequest request) {
@@ -70,10 +71,11 @@ public class AuthService implements Service {
         return request.remoteAddress();
     }
 
-    public AuthService(CachedUserDb userDb, CachedPageDb pageDb, Config appConfig) {
+    public AuthService(CachedUserDb userDb, CachedPageDb pageDb, Config appConfig, BlockingQueue<SendMailDto> sendMailQueue) {
         this.userDb = userDb;
         this.pageDb = pageDb;
         this.securityConfig = appConfig.get("security");
+        this.sendMailQueue = sendMailQueue;
         this.adminMail = securityConfig.get("default.admin").asString().get();
 
         String keyConfig = securityConfig.get("key").asString().get();
@@ -82,10 +84,6 @@ public class AuthService implements Service {
         tokenExpireHours = securityConfig.get("tokenExpireHours").asLong().get();
 
         createDefaults(securityConfig.get("default"));
-
-        Thread sendMailThread = new Thread(new SendMailProcessor(sendMailQueue, appConfig));
-        sendMailThread.setName("mail-sender");
-        sendMailThread.start();
     }
 
     @Override
@@ -195,11 +193,18 @@ public class AuthService implements Service {
     }
 
     public void changePassword(ServerRequest request, ServerResponse response, ChangeCredentialDto credentialDto) {
+        changePassword(request, response, credentialDto, false);
+    }
+
+    private void changePassword(ServerRequest request, ServerResponse response, ChangeCredentialDto credentialDto, boolean fromActivation) {
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} changing password for {1}", new Object[]{ requestId, credentialDto.mail() });
 
         UserEntity user = userDb.selectUserByMail(credentialDto.mail())
                                 .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s (change password mail not found)", credentialDto.mail()), "invalid credentials"));
+        if(!fromActivation) // if this method is called from activation, then the user won't be logged in
+            verifyCurrentUserOrAdmin(request, user.getId());
+
         String oldHashedPassword = EncodingUtil.hashString(credentialDto.oldPassword(), user.getSalt());
 
         if(!oldHashedPassword.equals(user.getPassword()))
@@ -216,18 +221,22 @@ public class AuthService implements Service {
     }
 
     public void activateUser(ServerRequest request, ServerResponse response, ChangeCredentialDto credentialDto) {
-        // TODO send mail to admin
         final String requestId = RequestLogHandler.parseRequestId(request);
         LOGGER.log(Level.FINE, "{0} activating user for {1}", new Object[]{ requestId, credentialDto.mail() });
+        String activationTime = DateTimeFormatter.ofPattern("dd.MM.yyyy hh:mm:ss").format(LocalDateTime.now());
 
-        UserEntity user = userDb.selectUserByMail(credentialDto.mail())
+                                                                                   UserEntity user = userDb.selectUserByMail(credentialDto.mail())
                                 .orElseThrow(() -> new ForbiddenException(String.format("login denied for %s (activate, mail not found)", credentialDto.mail()), "invalid credentials"));
+
         if(user.isActive())
             throw new BadRequestException("tried to activate already active user", "already active");
 
         try {
             userDb.activateUser(user.getId(), true);
-            changePassword(request, response, credentialDto);
+            changePassword(request, response, credentialDto, true);
+            sendMailQueue.add(new SendMailDto(Type.USER_ACTIVATED,
+                                              new UserActivatedMailDto(user.getMail(), activationTime),
+                                              adminMail));
         } catch (SQLException e) {
             throw new BadRequestException("unexpected db error", "activation failed, db error", e);
         }
@@ -276,6 +285,15 @@ public class AuthService implements Service {
             throw new UnauthorizedException("got admin request with no auth cookie", "unauthorized request");
 
         return parseJwt(tokenCookie.get());
+    }
+
+    private void verifyCurrentUserOrAdmin(ServerRequest request, UUID userId) {
+        SecurityToken token = extractTokenCookie(request.headers());
+        if(token.getUserId().equals(userId.toString()))
+            return;
+
+        if(!token.isAdmin())
+            throw new ForbiddenException("user tried to modify other user and is not admin", "not allowed");
     }
 
     public void validateSecurityToken(ServerRequest request, SecurityToken token) {

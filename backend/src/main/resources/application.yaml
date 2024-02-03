@@ -4,7 +4,7 @@ server:
 
 app:
   security:
-    frontend: "*"
+    frontend: "http://localhost"
     domain: "localhost"
     key: c29tZS1rZXk=
     tokenExpireHours: 168

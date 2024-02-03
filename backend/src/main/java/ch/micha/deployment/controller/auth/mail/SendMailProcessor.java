@@ -82,6 +82,8 @@ public class SendMailProcessor implements Runnable{
 
             String subject = switch (toSend.getMailType()) {
                 case LOGIN_GRANT -> "Deployment Controller: login granted";
+                case PAGE_INVITATION -> "michus-net Invitation";
+                case USER_ACTIVATED -> "Deployment Controller: user activated";
             };
 
             Message message = new MimeMessage(session);
@@ -105,15 +107,57 @@ public class SendMailProcessor implements Runnable{
     }
 
     private String createHtmlBody(SendMailDto toSend) {
+        String defaultBody = "unknown data for mail";
         return switch (toSend.getMailType()) {
             case LOGIN_GRANT -> {
-                String body = "unknown data for mail";
-                if(toSend.getData() instanceof SecurityToken token) {
-                    body = buildLoginMessage(token);
-                }
-                yield body;
+                if(toSend.getData() instanceof SecurityToken token)
+                   yield buildLoginMessage(token);
+                yield defaultBody;
+            }
+            case PAGE_INVITATION -> {
+                if(toSend.getData() instanceof PageInvitationMailDto pageInvitation)
+                    yield buildPageInvitationMessage(pageInvitation);
+                yield defaultBody;
+            }
+            case USER_ACTIVATED -> {
+                if(toSend.getData() instanceof  UserActivatedMailDto userActivated)
+                    yield buildUserActivatedMessage(userActivated);
+                yield defaultBody;
             }
         };
+    }
+
+    private String buildUserActivatedMessage(UserActivatedMailDto userActivated) {
+        return """
+               <h3>Hi</h3>
+               <p>Just letting you know, a user has just activated their account.</p>
+               <p>User: %s</p>
+               <p>Time: %s</p>
+               <br />
+               <p>Regards - michu de dev 🙋‍♂️</p>
+               """.formatted(userActivated.getUserMail(), userActivated.getTime());
+    }
+
+    private String buildPageInvitationMessage(PageInvitationMailDto pageInvitation) {
+        StringBuilder pages = new StringBuilder("<ul>");
+        for (String page : pageInvitation.getPages()) {
+            pages.append("<li>");
+            pages.append(page);
+            pages.append("</li>");
+        }
+        pages.append("</ul>");
+
+        return """
+               <h3>Hi %s</h3>
+               <p>You have been invited to access pages on michus-net.</p>
+               <p>Please head to the link <a href="%s">here</a> and complete the onboarding step.</p>
+               <br />
+               <p>You were invited visit the following pages:</p>
+               %s
+               <br />
+               <p>Best Regards</p>
+               <p>Micha</p>
+               """.formatted(pageInvitation.getUserMail().split("@")[0], pageInvitation.getUrl(), pages);
     }
 
     private String buildLoginMessage(SecurityToken token) {
