@@ -26,7 +26,6 @@ import io.helidon.webserver.ServerRequest;
 import io.helidon.webserver.ServerResponse;
 import io.helidon.webserver.Service;
 import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.JwtException;
 import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.SignatureAlgorithm;
 import java.security.Key;
@@ -258,24 +257,23 @@ public class AuthService implements Service {
 
     public SecurityToken parseJwt(String token) {
         SecurityToken securityToken = new SecurityToken();
-        Claims claims;
         try {
-             claims = Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
-        } catch (JwtException jwtException) {
-            throw new UnauthorizedException(String.format("caught invalid token: %s - %s", jwtException.getClass().getSimpleName(), jwtException.getMessage()),
+            Claims claims = Jwts.parser().setSigningKey(key).parseClaimsJws(token).getBody();
+
+            securityToken.setIssuer(claims.getIssuer());
+            securityToken.setIssuedAt(claims.getIssuedAt());
+            securityToken.setUserId(claims.get(SecurityToken.CLAIM_USER_ID, String.class));
+            securityToken.setUserMail(claims.get(SecurityToken.CLAIM_USER_MAIL, String.class));
+            securityToken.setAdmin(claims.get(SecurityToken.CLAIM_ADMIN, Boolean.class));
+            securityToken.setActive(claims.get(SecurityToken.CLAIM_ACTIVE, Boolean.class));
+            securityToken.setPrivatePagesAccess(claims.get(SecurityToken.CLAIM_PRIVATE_ACCESS, String.class));
+            securityToken.setExpiresAt(claims.getExpiration());
+
+            return securityToken;
+        } catch (Exception e) {
+            throw new UnauthorizedException(String.format("caught invalid token: %s - %s", e.getClass().getSimpleName(), e.getMessage()),
                 "invalid token provided");
         }
-
-        securityToken.setIssuer(claims.getIssuer());
-        securityToken.setIssuedAt(claims.getIssuedAt());
-        securityToken.setUserId(claims.get(SecurityToken.CLAIM_USER_ID, String.class));
-        securityToken.setUserMail(claims.get(SecurityToken.CLAIM_USER_MAIL, String.class));
-        securityToken.setAdmin(claims.get(SecurityToken.CLAIM_ADMIN, Boolean.class));
-        securityToken.setActive(claims.get(SecurityToken.CLAIM_ACTIVE, Boolean.class));
-        securityToken.setPrivatePagesAccess(claims.get(SecurityToken.CLAIM_PRIVATE_ACCESS, String.class));
-        securityToken.setExpiresAt(claims.getExpiration());
-
-        return securityToken;
     }
 
     public SecurityToken extractTokenCookie(RequestHeaders headers) {

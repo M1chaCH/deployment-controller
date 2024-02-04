@@ -1,5 +1,5 @@
 <script>
-	import {user} from "./store.js"; // TODO if user inactive redirect to onboarding
+	import {user} from "./store.js";
     import {onMount} from 'svelte';
     import ChangePassword from '../../public/ChangePassword.svelte';
     import { fly } from 'svelte/transition';
@@ -88,7 +88,7 @@
 		<span class="small-text">Some might me locked, you need to have special access for these.</span>
 	</p>
 
-    {#if !$user?.active}
+    {#if $user && !$user.active}
         <p>
             Your account isn't yet active. You need to complete the omboarding steps
             <a href={onboardingLink} style="color: var(--michu-tech-warn);">here</a>!
