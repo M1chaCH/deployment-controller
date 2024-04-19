@@ -10,6 +10,7 @@ import ch.micha.deployment.controller.auth.error.GlobalErrorHandler;
 import ch.micha.deployment.controller.auth.logging.RequestLogHandler;
 import ch.micha.deployment.controller.auth.mail.SendMailDto;
 import ch.micha.deployment.controller.auth.mail.SendMailProcessor;
+import ch.micha.deployment.controller.auth.resource.ContactResource;
 import ch.micha.deployment.controller.auth.resource.PageResource;
 import ch.micha.deployment.controller.auth.resource.UserResource;
 import io.helidon.common.LogConfig;
@@ -118,7 +119,8 @@ public final class Main {
             .any("/users", authHandler)
             .any("/pages", authHandler)
             .register("/users", new UserResource(userDb, sendMailQueue, appConfig.get("security")))
-            .register("/pages", new PageResource(pageDb, userDb));
+            .register("/pages", new PageResource(pageDb, userDb))
+            .register("/contact", new ContactResource(sendMailQueue, appConfig.get("security").get("default").get("admin").asString().get()));
 
         return builder.build();
     }

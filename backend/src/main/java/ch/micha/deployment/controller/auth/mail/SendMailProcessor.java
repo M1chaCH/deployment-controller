@@ -1,6 +1,7 @@
 package ch.micha.deployment.controller.auth.mail;
 
 import ch.micha.deployment.controller.auth.auth.SecurityToken;
+import ch.micha.deployment.controller.auth.dto.ContactDto;
 import ch.micha.deployment.controller.auth.location.LocationResolver;
 import com.maxmind.geoip2.model.CityResponse;
 import io.helidon.config.Config;
@@ -84,6 +85,7 @@ public class SendMailProcessor implements Runnable{
                 case LOGIN_GRANT -> "Deployment Controller: login granted";
                 case PAGE_INVITATION -> "michus-net Invitation";
                 case USER_ACTIVATED -> "Deployment Controller: user activated";
+                case CONTACT_REQUEST -> "Deployment Controller: contact request";
             };
 
             Message message = new MimeMessage(session);
@@ -122,6 +124,12 @@ public class SendMailProcessor implements Runnable{
             case USER_ACTIVATED -> {
                 if(toSend.getData() instanceof  UserActivatedMailDto userActivated)
                     yield buildUserActivatedMessage(userActivated);
+                yield defaultBody;
+            }
+            case CONTACT_REQUEST -> {
+                if(toSend.getData() instanceof ContactDto dto && dto.mail() != null && dto.message() != null) {
+                    yield buildContactMessage(dto);
+                }
                 yield defaultBody;
             }
         };
@@ -190,5 +198,17 @@ public class SendMailProcessor implements Runnable{
                              token.getPrivatePagesAccess().replace(SecurityToken.CLAIM_PRIVATE_ACCESS_DELIMITER, ", "),
                              token.getIssuedAt().toString()
         );
+    }
+
+    private String buildContactMessage(ContactDto dto) {
+        String message = """
+                         <h3>Hi</h3>
+                         <p>You have new contact request.</p>
+                         <p>From: <strong>%s</strong></p>
+                         <h4>Message</h4>
+                         <p>%s</p>
+                         """;
+
+        return String.format(message, dto.mail(), dto.message());
     }
 }

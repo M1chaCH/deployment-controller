@@ -116,6 +116,12 @@
         {/each}
     </div>
 </main>
+
+<footer>
+    <a href="/legal">Privacy & Impressum</a>
+    <a href="https://github.com/M1chaCH" target="_blank">Github</a>
+</footer>
+
 <div class="options">
 	<button on:click={() => darkTheme = toggleDarkTheme()}>
 		{#if darkTheme}
@@ -280,5 +286,17 @@
         border-top-right-radius: 12px;
 
         background-color: color-mix(in srgb, var(--michu-tech-background) 92%, var(--michu-tech-foreground));
+    }
+
+    footer {
+        margin-top: 12vh;
+        width: 100%;
+        display: flex;
+        flex-flow: row wrap;
+        justify-content: space-evenly;
+    }
+
+    footer a {
+        opacity: 0.75;
     }
 </style>

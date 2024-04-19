@@ -18,5 +18,6 @@ public class SendMailDto {
         LOGIN_GRANT,
         PAGE_INVITATION,
         USER_ACTIVATED,
+        CONTACT_REQUEST,
     }
 }
