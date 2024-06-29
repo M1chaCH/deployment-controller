@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Allow: /host
+Disallow: /host/admin
+Disallow: /host/onboarding
+Disallow: /apps/room-automation
+Disallow: /apps/sisu
+Disallow: /apps/daily-prayer-editor
