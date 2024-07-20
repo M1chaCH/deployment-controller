@@ -2,33 +2,31 @@ package pages
 
 import (
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/gin-gonic/gin"
 	"log"
 	"net/http"
 )
 
-type Page struct {
-	ID          string `json:"id" db:"id"`
-	Url         string `json:"url" db:"url"`
-	Title       string `json:"title" db:"title"`
-	Description string `json:"description" db:"description"`
-	PrivatePage bool   `json:"private_page" db:"private_page"`
-}
-
-func Init(router *gin.Engine) {
+func Init(router *gin.RouterGroup) {
 	router.GET("/pages", getPages)
 	router.POST("/pages", postPage)
 	router.PUT("/pages", putPage)
 	router.DELETE("/pages/:id", deletePage)
 
-	_, err := LoadPages()
+	tx := framework.DB().MustBegin()
+	_, err := LoadPages(tx)
 	if err != nil {
 		panic(fmt.Sprintf("failed to init all pages: %v", err))
+	}
+	err = tx.Commit()
+	if err != nil {
+		panic(fmt.Sprintf("failed to init all pages, transaction not committed ?!?: %v", err))
 	}
 }
 
 func getPages(c *gin.Context) {
-	var pages, err = LoadPages()
+	var pages, err = LoadPages(framework.GetTx(c))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": err.Error()})
 		return
@@ -45,12 +43,12 @@ func postPage(c *gin.Context) {
 		return
 	}
 
-	if SimilarPageExists(page.ID, page.Title, page.Description) {
+	if SimilarPageExists(page.Id, page.Title, page.Description) {
 		c.JSON(http.StatusConflict, gin.H{"message": "page already exists"})
 		return
 	}
 
-	err := InsertPage(page)
+	err := InsertPage(framework.GetTx(c), page)
 	if err != nil {
 		log.Panicf("failed to insert page %v: %v", page, err)
 	}
@@ -66,12 +64,12 @@ func putPage(c *gin.Context) {
 		return
 	}
 
-	if !PageExists(page.ID) {
+	if !PageExists(page.Id) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "page does not exist"})
 		return
 	}
 
-	err := UpdatePage(page)
+	err := UpdatePage(framework.GetTx(c), page)
 	if err != nil {
 		log.Panicf("failed to update page %v: %v", page, err)
 	}
@@ -81,7 +79,7 @@ func putPage(c *gin.Context) {
 
 func deletePage(c *gin.Context) {
 	pageId := c.Param("id")
-	err := DeletePage(pageId)
+	err := DeletePage(framework.GetTx(c), pageId)
 
 	if err == nil {
 		c.JSON(http.StatusOK, gin.H{"message": "page deleted"})
