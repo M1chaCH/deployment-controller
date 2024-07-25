@@ -11,9 +11,10 @@ import (
 )
 
 const (
-	LoginStateLoggedIn         = "logged-in"
-	LoginStateLoggedOut        = "logged-out"
-	LoginStateTwofactorWaiting = "two-factor-waiting"
+	LoginStateLoggedIn          = "logged-in"
+	LoginStateLoggedOut         = "logged-out"
+	LoginStateTwofactorWaiting  = "two-factor-waiting"
+	LoginStateOnboardingWaiting = "onboarding-waiting"
 )
 
 const idJwtCookieName = "MTAuth"
@@ -36,6 +37,21 @@ type IdentityToken struct {
 		- IssuedAt -> IssuedAt
 	*/
 	jwt.RegisteredClaims
+}
+
+// RespondWithCookie creates a JSON response and appends the ID cookie. After this you can't apply any changes to the response in the context.
+func RespondWithCookie(c *gin.Context, code int, obj any) {
+	AppendJwtToken(c)
+	c.JSON(code, obj)
+}
+
+func AbortWithCooke(c *gin.Context, code int, message string) {
+	AppendJwtToken(c)
+	c.AbortWithStatusJSON(code, gin.H{"message": message})
+}
+
+func GetCurrentIdentityToken(c *gin.Context) (IdentityToken, bool) {
+	return getIdentityToken(c, updatedIdJwtContextKey)
 }
 
 // ToJwtString converts the data to a JwtToken with a configured secret

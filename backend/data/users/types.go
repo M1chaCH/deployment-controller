@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type User struct {
+type userEntity struct {
 	Id        string    `db:"id"`
 	Mail      string    `db:"mail"`
 	Password  string    `db:"password"`
@@ -12,7 +12,8 @@ type User struct {
 	Admin     bool      `db:"admin"`
 	CreatedAt time.Time `db:"created_at"`
 	LastLogin time.Time `db:"last_login"`
-	Active    bool      `db:"active"`
+	Blocked   bool      `db:"blocked"`
+	Onboard   bool      `db:"onboard"`
 }
 
 type UserCacheItem struct {
@@ -23,7 +24,8 @@ type UserCacheItem struct {
 	Admin     bool                `json:"admin"`
 	CreatedAt time.Time           `json:"createdAt"`
 	LastLogin time.Time           `json:"lastLogin"`
-	Active    bool                `json:"active"`
+	Blocked   bool                `json:"blocked"`
+	Onboard   bool                `json:"onboard"`
 	Pages     []UserPageCacheItem `json:"pages"`
 }
 

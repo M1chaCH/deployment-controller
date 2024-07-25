@@ -52,15 +52,15 @@ func InitCache() {
 	logs.Info("Initialized cache for clients")
 }
 
-func LoadClientInfo(clientId string) (ClientCacheItem, error) {
+func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
-		cachedItem, _ := cache.Get(clientId)
-		return cachedItem, nil
+		cachedItem, found := cache.Get(clientId)
+		return cachedItem, found, nil
 	}
 
 	logs.Info("client cache not initialized, selecting client info")
 	db := framework.DB()
-	var client KnownClient
+	var client knownClientEntity
 	var devices []ClientDevice
 	knownClientError := make(chan error)
 	devicesError := make(chan error)
@@ -76,11 +76,11 @@ func LoadClientInfo(clientId string) (ClientCacheItem, error) {
 
 	err := <-knownClientError
 	if err != nil {
-		return ClientCacheItem{}, err
+		return ClientCacheItem{}, false, err
 	}
 	err = <-devicesError
 	if err != nil {
-		return ClientCacheItem{}, err
+		return ClientCacheItem{}, false, err
 	}
 
 	cacheItem := ClientCacheItem{
@@ -89,21 +89,21 @@ func LoadClientInfo(clientId string) (ClientCacheItem, error) {
 		Devices:    devices,
 	}
 
-	return cacheItem, nil
+	return cacheItem, true, nil
 }
 
-func LoadExistingClient(ip, userAgent string) (ClientCacheItem, error) {
+func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		resultChannel := make(chan ClientCacheItem)
 		go cache.GetAll(resultChannel)
 		for item := range resultChannel {
 			for _, device := range item.Devices {
 				if device.IpAddress == ip && device.UserAgent == userAgent {
-					return item, nil
+					return item, true, nil
 				}
 			}
 		}
-		return ClientCacheItem{}, nil
+		return ClientCacheItem{}, false, nil
 	}
 
 	logs.Info("client cache not initialized, selecting existing client")
@@ -111,18 +111,17 @@ func LoadExistingClient(ip, userAgent string) (ClientCacheItem, error) {
 	var devices []ClientDevice
 	err := db.Select(&devices, "SELECT * FROM client_devices WHERE ip_address=$1 AND user_agent=$2 LIMIT 1", ip, userAgent)
 	if err != nil {
-		return ClientCacheItem{}, err
+		return ClientCacheItem{}, false, err
 	}
 
 	if len(devices) <= 0 {
-		return ClientCacheItem{}, nil
+		return ClientCacheItem{}, false, nil
 	}
 
 	return LoadClientInfo(devices[0].ClientId)
 }
 
-func CreateNewClient(tx *sqlx.Tx, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {
-	clientId := uuid.NewString()
+func CreateNewClient(tx *sqlx.Tx, clientId string, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {
 	createdAt := time.Now()
 	if realUserId == "" {
 		_, err := tx.Exec("INSERT INTO clients (id, created_at) VALUES ($1, $2)", clientId, createdAt)
@@ -155,6 +154,7 @@ func CreateNewClient(tx *sqlx.Tx, realUserId string, ip string, userAgent string
 	}
 	cache.StoreSafeBackground(cacheItem)
 
+	logs.Info(fmt.Sprintf("created new client: agent:%s ip:%s", userAgent, ip))
 	return cacheItem, nil
 }
 
@@ -170,7 +170,12 @@ func AddDeviceToClient(tx *sqlx.Tx, clientId string, ip string, userAgent string
 		return ClientCacheItem{}, err
 	}
 
-	return LoadClientInfo(clientId)
+	logs.Info(fmt.Sprintf("added new device to client: client:%s agent:%s ip:%s", clientId, userAgent, ip))
+	client, found, err := LoadClientInfo(clientId)
+	if !found && err == nil {
+		logs.Warn(fmt.Sprintf("just inserted client, but was not found: id:%s", clientId))
+	}
+	return client, err
 }
 
 func AddUserToClient(tx *sqlx.Tx, clientId string, userId string) (ClientCacheItem, error) {
@@ -183,13 +188,19 @@ func AddUserToClient(tx *sqlx.Tx, clientId string, userId string) (ClientCacheIt
 	if err != nil {
 		return ClientCacheItem{}, err
 	}
-	return LoadClientInfo(clientId)
+
+	logs.Info(fmt.Sprintf("added user to clinet: user:%s client:%s", userId, clientId))
+	client, found, err := LoadClientInfo(clientId)
+	if !found && err == nil {
+		logs.Warn(fmt.Sprintf("just added user to client, but was not found: id:%s", clientId))
+	}
+	return client, err
 }
 
 func selectAllClients() ([]ClientCacheItem, error) {
 	db := framework.DB()
 	var result []ClientCacheItem
-	var clients []KnownClient
+	var clients []knownClientEntity
 	var devices []ClientDevice
 	knownClientsError := make(chan error)
 	devicesError := make(chan error)

@@ -2,10 +2,10 @@ package framework
 
 import (
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	_ "github.com/lib/pq"
-	"log"
 	"net/http"
 	"time"
 )
@@ -45,7 +45,7 @@ func DB() *sqlx.DB {
 	db.SetConnMaxIdleTime(time.Hour)
 	db.SetConnMaxLifetime(8 * time.Hour)
 
-	log.Printf("Connected to database: %s:%d %s", config.Db.Host, config.Db.Port, config.Db.Name)
+	logs.Info(fmt.Sprintf("Connected to database: %s:%d %s", config.Db.Host, config.Db.Port, config.Db.Name))
 	configuredDb = db
 	return configuredDb
 }
@@ -60,7 +60,7 @@ func TransactionMiddleware() gin.HandlerFunc {
 
 		tx, err := db.Beginx()
 		if err != nil {
-			log.Printf("failed to begin transaction: %s", err)
+			logs.Warn(fmt.Sprintf("failed to begin transaction: %s", err))
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "could not begin transaction"})
 			return
 		}
@@ -74,14 +74,14 @@ func TransactionMiddleware() gin.HandlerFunc {
 		if c.Writer.Status() < 300 {
 			err = tx.Commit()
 			if err != nil {
-				log.Printf("failed to commit transaction: %s", err)
+				logs.Info(fmt.Sprintf("failed to commit transaction: %s", err))
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "changes could not be saved"})
 				return
 			}
 		} else {
 			err = tx.Rollback()
 			if err != nil {
-				log.Printf("failed to rollback transaction: %s", err)
+				logs.Info(fmt.Sprintf("failed to rollback transaction: %s", err))
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "internal DB error"})
 				return
 			}
@@ -95,7 +95,7 @@ func getAndValidateDbConfig() *AppConfig {
 	config := Config()
 
 	if config.Db.Name == "" {
-		log.Println("DB Name is not configured, using default: 'deployment_controller'")
+		logs.Info("DB Name is not configured, using default: 'deployment_controller'")
 		config.Db.Name = "deployment_controller"
 	}
 
@@ -108,12 +108,12 @@ func getAndValidateDbConfig() *AppConfig {
 	}
 
 	if config.Db.Host == "" {
-		log.Println("DB Host is not configured, using default: 'localhost'")
+		logs.Info("DB Host is not configured, using default: 'localhost'")
 		config.Db.Host = "localhost"
 	}
 
 	if config.Db.Port == 0 {
-		log.Println("DB Port is not configured, using default: '5432'")
+		logs.Info("DB Port is not configured, using default: '5432'")
 		config.Db.Port = 5432
 	}
 

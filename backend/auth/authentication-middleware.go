@@ -3,10 +3,10 @@ package auth
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/clients"
-	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -26,17 +26,17 @@ import (
 //     yes -> create new, keep client & user id, but logout
 //  4. check if agent changed to unknown agent and logged in
 //     yes -> logout
-//  5. check if logged in and user inactive
+//  5. check if logged in and user blocked
 //     yes -> logout
 func AuthenticationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// 1. check if cookie is here
 		requestToken, ok := getIdentityToken(c, idJwtContextKey)
 		if !ok || requestToken.Issuer == "" {
-			newIdToken, err := processNewClient(framework.GetTx(c), c.ClientIP(), c.Request.UserAgent())
+			newIdToken, err := processNewClient(uuid.NewString(), c.ClientIP(), c.Request.UserAgent())
 			if err != nil {
 				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
-				c.AbortWithStatusJSON(500, gin.H{"message": "failed to process request"})
+				AbortWithCooke(c, 500, "failed to process request")
 				return
 			}
 
@@ -45,10 +45,23 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		client, err := clients.LoadClientInfo(requestToken.Issuer)
+		client, found, err := clients.LoadClientInfo(requestToken.Issuer)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("client from cookie was not found, %v", err))
-			c.AbortWithStatusJSON(404, gin.H{"message": "some required data was not found"})
+			logs.Warn(fmt.Sprintf("client from cookie was not found due to internal error!, %v", err))
+			AbortWithCooke(c, 404, "some required data was not found")
+			return
+		}
+		if !found {
+			logs.Warn(fmt.Sprintf("client from cookie was not found, %s", requestToken.Issuer))
+			newIdToken, err := processNewClient(requestToken.Issuer, c.ClientIP(), c.Request.UserAgent())
+			if err != nil {
+				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
+				AbortWithCooke(c, 500, "failed to process request")
+				return
+			}
+
+			c.Set(updatedIdJwtContextKey, newIdToken)
+			c.Next()
 			return
 		}
 
@@ -67,18 +80,21 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 					userAgent)
 
 				c.Set(updatedIdJwtContextKey, token)
+				logs.Info(fmt.Sprintf("client changed to other known device: client:%s agent:%s ip:%s", requestToken.Issuer, userAgent, ip))
 			} else {
 				_, err := clients.AddDeviceToClient(framework.GetTx(c), requestToken.Issuer, ip, userAgent)
 				if err != nil {
 					logs.Warn(fmt.Sprintf("failed to add device to client, %v", err))
-
-					c.AbortWithStatusJSON(500, gin.H{"message": "failed to process request"})
+					AbortWithCooke(c, 500, "failed to process request")
 					return
 				}
+
+				// token is updated later
 
 				if userAgent != requestToken.OriginAgent {
 					c.Set(addedAgentContextKey, userAgent)
 				}
+				logs.Info(fmt.Sprintf("client changed to new device: client:%s agent:%s ip:%s", requestToken.Issuer, userAgent, ip))
 			}
 		}
 
@@ -102,13 +118,13 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		}
 
 		// 4. check if agent changed and logged in
-		// 5. check if logged in and user inactive
-		user, userExists := users.LoadUserById(requestToken.Subject)
-		if requestToken.LoginState != LoginStateLoggedOut && (userAgent != requestToken.OriginAgent || !userExists || !user.Active) {
+		// 5. check if logged in and user blocked
+		user, userExists := GetCurrentUser(c)
+		if requestToken.LoginState != LoginStateLoggedOut && (userAgent != requestToken.OriginAgent || !userExists || !user.Blocked) {
 			token := createIdentityToken(requestToken.Issuer,
 				requestToken.Subject,
 				requestToken.Mail,
-				false,
+				requestToken.Admin,
 				LoginStateLoggedOut,
 				requestToken.PrivatePages,
 				ip,
@@ -116,6 +132,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 
 			c.Set(updatedIdJwtContextKey, token)
 			c.Next()
+			logs.Warn(fmt.Sprintf("changed login state of client due to agent change or blocked: client:%s agent:%s ip:%s", requestToken.Issuer, userAgent, ip))
 			return
 		}
 
@@ -124,7 +141,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			token := createIdentityToken(requestToken.Issuer,
 				requestToken.Subject,
 				requestToken.Mail,
-				false,
+				requestToken.Admin,
 				LoginStateLoggedOut,
 				requestToken.PrivatePages,
 				ip,
@@ -132,6 +149,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 
 			c.Set(updatedIdJwtContextKey, token)
 			c.Next()
+			logs.Info(fmt.Sprintf("ip changed while waiting for MFA: client:%s agent:%s ip:%s", requestToken.Issuer, userAgent, ip))
 			return
 		}
 

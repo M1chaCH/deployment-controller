@@ -1,17 +1,18 @@
-drop table if exists users;
+drop table if exists users cascade;
 create table users
 (
     id uuid primary key,
     mail varchar(255) not null unique ,
     password varchar(255) not null,
-    salt varchar(255) not null,
+    salt bytea not null,
     admin boolean not null default false,
-    created_at timestamp not null default current_timestamp,
-    last_login timestamp not null default current_timestamp,
-    active boolean not null default false
+    created_at timestamptz not null default current_timestamp,
+    last_login timestamptz not null default current_timestamp,
+    blocked boolean not null default false,
+    onboard boolean not null default false
 );
 
-drop table if exists pages;
+drop table if exists pages cascade;
 create table pages
 (
     id          uuid unique primary key,
@@ -22,7 +23,7 @@ create table pages
     private_page boolean not null default true
 );
 
-drop table if exists user_page;
+drop table if exists user_page cascade;
 create table user_page
 (
     user_id uuid not null,
@@ -32,7 +33,7 @@ create table user_page
     primary key (page_id, user_id)
 );
 
-drop table if exists clients;
+drop table if exists clients cascade;
 create table clients
 (
     id uuid not null primary key,
@@ -41,7 +42,7 @@ create table clients
     foreign key (real_user_id) references users(id) on delete cascade
 );
 
-drop table if exists client_devices;
+drop table if exists client_devices cascade;
 create table client_devices
 (
     id uuid not null primary key,
@@ -53,7 +54,7 @@ create table client_devices
     constraint device_is_unique_to_client unique (client_id, ip_address, user_agent)
 );
 
-drop table if exists mfa_token;
+drop table if exists mfa_token cascade;
 create table mfa_token
 (
     token varchar(8) not null primary key,

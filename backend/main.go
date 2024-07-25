@@ -7,6 +7,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/M1chaCH/deployment-controller/rest"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -30,7 +31,7 @@ Clean Configs
 
 Endpoints
 - Auth (TwoFactor!, Login, LoggedInUserData, IsLoggedIn)
-- Admin (User X Pages, remove user, block user, change password)
+- Admin (user X Pages, remove user, block user, change password)
 - Health (mini stats for health)
 - Contact
 
@@ -68,6 +69,8 @@ func main() {
 	host := appConfig.Host
 	port := appConfig.Port
 
+	initCaches()
+
 	router := gin.Default()
 	// TODO, i think this does nothing
 	router.Use(cors.New(cors.Config{
@@ -81,8 +84,7 @@ func main() {
 	router.Use(auth.AuthenticationMiddleware())
 
 	router.GET("/ping", pong)
-
-	initCaches()
+	initRoutes(router)
 
 	err := router.Run(fmt.Sprintf("%s:%s", host, port))
 	if err != nil {
@@ -91,7 +93,7 @@ func main() {
 }
 
 func pong(c *gin.Context) {
-	RespondWithCookie(c, http.StatusOK, gin.H{"message": "pong"})
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "pong"})
 }
 
 func initCaches() {
@@ -99,8 +101,11 @@ func initCaches() {
 	users.InitCache()
 }
 
-// RespondWithCookie creates a JSON response and appends the ID cookie. After this you can't apply any changes to the response in the context.
-func RespondWithCookie(c *gin.Context, code int, obj any) {
-	auth.AppendJwtToken(c)
-	c.JSON(code, obj)
+func initRoutes(router *gin.Engine) {
+	openEndpoints := router.Group("/open")
+	rest.InitOpenEndpoints(openEndpoints)
+
+	// TODO make sure only admins can execute these requests
+	adminEndpoints := router.Group("/admin")
+	rest.InitAdminEndpoints(adminEndpoints)
 }

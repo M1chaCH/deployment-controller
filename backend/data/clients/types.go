@@ -5,7 +5,7 @@ import (
 	"time"
 )
 
-type KnownClient struct {
+type knownClientEntity struct {
 	Id         string         `db:"id"`
 	RealUserId sql.NullString `db:"real_user_id"`
 	CreatedAt  time.Time      `db:"created_at"`
