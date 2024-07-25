@@ -3,17 +3,19 @@ package main
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/data/clients"
+	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
-	"github.com/M1chaCH/deployment-controller/rest/admin"
-	"github.com/M1chaCH/deployment-controller/rest/public"
+	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
+	"net/http"
 )
 
 /*
 TODO:
 Middlewares
-1. Error, handle errors and log critical stuff to elastic, rollback transaction if exists in context
+1. Error, handle errors and logs critical stuff to elastic, rollback transaction if exists in context
 2. Identity, add IdentityId to context (maybe even add Id to localstorage if determined)
 3. ✔ Transaction, add transaction to context, commit transaction if success
 4. Auth, check if endpoint needs validation and check JWT Token
@@ -39,7 +41,7 @@ Login
 
 Mail
 - send mails for login
-- send mails for TwoFacture token
+- send mails for TwoFacture tokens
 - send mails if issues were detected (stats or errors)
 - send mails for contact requests (limit rate)
 
@@ -78,11 +80,27 @@ func main() {
 	router.Use(auth.IdentityJwtMiddleware())
 	router.Use(auth.AuthenticationMiddleware())
 
-	public.Init(router)
-	admin.Init(router)
+	router.GET("/ping", pong)
+
+	initCaches()
 
 	err := router.Run(fmt.Sprintf("%s:%s", host, port))
 	if err != nil {
-		fmt.Println("could not start Webserver", err)
+		logs.Severe(fmt.Sprintf("could not start server: %v", err))
 	}
+}
+
+func pong(c *gin.Context) {
+	RespondWithCookie(c, http.StatusOK, gin.H{"message": "pong"})
+}
+
+func initCaches() {
+	clients.InitCache()
+	users.InitCache()
+}
+
+// RespondWithCookie creates a JSON response and appends the ID cookie. After this you can't apply any changes to the response in the context.
+func RespondWithCookie(c *gin.Context, code int, obj any) {
+	auth.AppendJwtToken(c)
+	c.JSON(code, obj)
 }

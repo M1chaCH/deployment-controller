@@ -14,7 +14,8 @@ create table users
 drop table if exists pages;
 create table pages
 (
-    id          varchar(255) unique primary key,
+    id          uuid unique primary key,
+    technical_name varchar(255) not null unique,
     url         varchar(255) not null,
     title       varchar(255) not null,
     description varchar(255) not null,
@@ -25,7 +26,7 @@ drop table if exists user_page;
 create table user_page
 (
     user_id uuid not null,
-    page_id varchar(250) not null,
+    page_id uuid not null,
     foreign key (user_id) references users(id) on delete cascade,
     foreign key (page_id) references pages(id) on delete cascade,
     primary key (page_id, user_id)

@@ -7,9 +7,10 @@ import (
 )
 
 type AppConfig struct {
-	Host string `yaml:"host"`
-	Port string `yaml:"port"`
-	Db   struct {
+	Host      string `yaml:"host"`
+	Port      string `yaml:"port"`
+	CacheType string `yaml:"cache_type"`
+	Db        struct {
 		Host     string `yaml:"host"`
 		Port     int    `yaml:"port"`
 		Name     string `yaml:"name"`
@@ -39,8 +40,6 @@ func Config() *AppConfig {
 	if err != nil {
 		panic(fmt.Sprintf("config file could not be parsed, %v", err))
 	}
-
-	fmt.Printf("read config, %v\n", cachedConfig)
 
 	return &cachedConfig
 }

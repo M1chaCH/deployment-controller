@@ -1,9 +1,16 @@
 host: localhost
 port: 8080
+cache_type: local
 db:
+  name: deployment_controller_2
+  host: localhost
+  port: 5432
   user: postgres
   password: postgres
 jwt:
   secret: ZG9uJ3QgZG8gdGhpcw==
   lifetime: 168 #hous
   domain: localhost
+root:
+  mail: test@mail.com
+  password: test
