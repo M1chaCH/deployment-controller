@@ -10,17 +10,23 @@ import (
 	"time"
 )
 
-func GetTx(c *gin.Context) *sqlx.Tx {
-	value, ok := c.Get(txContextKey)
-	if !ok {
-		panic("transaction was never set?!?")
-	}
+// GetTx lazy loads the transaction for the request.
+// the transaction is only started on the first execution of the inner function
+// the transaction will automatically be completed / rollback if it was started
+func GetTx(c *gin.Context) func() (*sqlx.Tx, error) {
+	return func() (*sqlx.Tx, error) {
+		tx := getTxFromContext(c)
+		if tx != nil {
+			return tx, nil
+		}
 
-	tx, ok := value.(*sqlx.Tx)
-	if !ok {
-		panic("set transaction is not a transaction?!?")
+		tx, err := DB().Beginx()
+		if err != nil {
+			return nil, err
+		}
+		c.Set(txContextKey, tx)
+		return tx, nil
 	}
-	return tx
 }
 
 func DB() *sqlx.DB {
@@ -52,37 +58,40 @@ func DB() *sqlx.DB {
 
 const txContextKey = "DB_TRANSACTION"
 
-// todo maybe not middleware but part of GetTx(), because this transaction is not always used if line 71 is changed
+func getTxFromContext(c *gin.Context) *sqlx.Tx {
+	value, ok := c.Get(txContextKey)
+	if !ok {
+		return nil
+	}
+
+	tx, ok := value.(*sqlx.Tx)
+	if !ok {
+		logs.Severe("set transaction is not a transaction?!?")
+	}
+	return tx
+}
+
 func TransactionMiddleware() gin.HandlerFunc {
-
 	return func(c *gin.Context) {
-		start := time.Now()
-		db := DB()
+		c.Next()
 
-		tx, err := db.Beginx()
-		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to begin transaction: %s", err))
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "could not begin transaction"})
+		tx := getTxFromContext(c)
+		if tx == nil {
 			return
 		}
-
-		c.Set(txContextKey, tx)
-		logs.Info(fmt.Sprintf("prepare transaction: %v", time.Since(start)))
-		c.Next()
-		start = time.Now()
 
 		// why only when request succeeded?
 		// because if there was no panic, but I am aborting a request with code 404 or so, then I want the changes to be reverted
 		// -> can't always store client updates -> don't use transaction for things that must always persist.
 		if c.Writer.Status() < 400 {
-			err = tx.Commit()
+			err := tx.Commit()
 			if err != nil {
 				logs.Info(fmt.Sprintf("failed to commit transaction: %s", err))
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "changes could not be saved"})
 				return
 			}
 		} else {
-			err = tx.Rollback()
+			err := tx.Rollback()
 			if err != nil {
 				logs.Info(fmt.Sprintf("failed to rollback transaction: %s", err))
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "internal DB error"})
@@ -90,8 +99,6 @@ func TransactionMiddleware() gin.HandlerFunc {
 			}
 			logs.Info("transaction rolled back")
 		}
-
-		logs.Info(fmt.Sprintf("commit transaction: %v", time.Since(start)))
 	}
 }
 

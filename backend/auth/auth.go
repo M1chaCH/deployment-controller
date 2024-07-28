@@ -115,8 +115,8 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 // processNewClient checks if an other client can be found by the ip and agent. if not creates the client with the given ID
 // if client was found -> clientId will change
 // not transactional -> will always save
-func processNewClient(tx *sqlx.Tx, clientId, ip, userAgent string) (IdentityToken, error) {
-	client, found, err := clients.TryFindExistingClient(tx, ip, userAgent)
+func processNewClient(txFunc func() (*sqlx.Tx, error), clientId, ip, userAgent string) (IdentityToken, error) {
+	client, found, err := clients.TryFindExistingClient(txFunc, ip, userAgent)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("no existing client found for %s:%s due to db error: %v", ip, userAgent, err))
 		return IdentityToken{}, err
@@ -129,7 +129,7 @@ func processNewClient(tx *sqlx.Tx, clientId, ip, userAgent string) (IdentityToke
 			return IdentityToken{}, err
 		}
 
-		client, err = clients.CreateNewClient(tx, clientId, "", ip, userAgent)
+		client, err = clients.CreateNewClient(txFunc, clientId, "", ip, userAgent)
 		if err != nil {
 			return IdentityToken{}, err
 		}

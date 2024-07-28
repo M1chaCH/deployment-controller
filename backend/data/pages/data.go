@@ -11,11 +11,11 @@ import (
 func InitCache() {
 	logs.Info("initialized pages cache")
 	tx, err := framework.DB().Beginx()
-	if err != nil {
-		logs.Panic(fmt.Sprintf("failed to begin tx for page cache: %v", err))
+	txFunc := func() (*sqlx.Tx, error) {
+		return tx, err
 	}
 
-	items, err := LoadPages(tx)
+	items, err := LoadPages(txFunc)
 	if err != nil {
 		logs.Panic(fmt.Sprintf("failed to load items for page cache: %v", err))
 	}
@@ -33,7 +33,7 @@ func InitCache() {
 	logs.Info("successfully initialized pages cache")
 }
 
-func LoadPages(tx *sqlx.Tx) ([]Page, error) {
+func LoadPages(txFunc func() (*sqlx.Tx, error)) ([]Page, error) {
 	if cache.IsInitialized() {
 		result, err := cache.GetAllAsArray()
 		if err != nil || len(result) > 0 {
@@ -42,9 +42,13 @@ func LoadPages(tx *sqlx.Tx) ([]Page, error) {
 	}
 
 	logs.Info("no pages found in cache, checking db")
+	tx, err := txFunc()
+	if err != nil {
+		return nil, err
+	}
 
 	var pages []Page
-	err := tx.Select(&pages, "select * from pages")
+	err = tx.Select(&pages, "select * from pages")
 
 	if err == nil {
 		err = cache.Initialize(pages)
@@ -57,8 +61,12 @@ func LoadPages(tx *sqlx.Tx) ([]Page, error) {
 	return pages, err
 }
 
-func InsertNewPage(tx *sqlx.Tx, page Page) error {
-	_, err := tx.NamedExec("insert into pages (id, technical_name, url, title, description, private_page) VALUES (:id, :technical_name, :url, :title, :description, :private_page)", page)
+func InsertNewPage(txFunc func() (*sqlx.Tx, error), page Page) error {
+	tx, err := txFunc()
+	if err != nil {
+		return err
+	}
+	_, err = tx.NamedExec("insert into pages (id, technical_name, url, title, description, private_page) VALUES (:id, :technical_name, :url, :title, :description, :private_page)", page)
 
 	if err == nil {
 		cache.StoreSafeBackground(page)
@@ -67,7 +75,12 @@ func InsertNewPage(tx *sqlx.Tx, page Page) error {
 	return err
 }
 
-func UpdatePage(tx *sqlx.Tx, page Page) error {
+func UpdatePage(txFunc func() (*sqlx.Tx, error), page Page) error {
+	tx, err := txFunc()
+	if err != nil {
+		return err
+	}
+
 	result, err := tx.NamedExec("update pages set technical_name = :technical_name, url = :url, title = :title, description = :description, private_page = :private_page where id = :id", page)
 	if err != nil {
 		return err
@@ -85,8 +98,13 @@ func UpdatePage(tx *sqlx.Tx, page Page) error {
 	return nil
 }
 
-func DeletePage(tx *sqlx.Tx, pageId string) error {
-	_, err := tx.Exec(`delete from pages where id = $1`, pageId)
+func DeletePage(txFunc func() (*sqlx.Tx, error), pageId string) error {
+	tx, err := txFunc()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(`delete from pages where id = $1`, pageId)
 	if err == nil {
 		err = cache.Remove(pageId)
 	}
