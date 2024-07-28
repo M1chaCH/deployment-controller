@@ -22,6 +22,10 @@ type AppConfig struct {
 		Lifetime int    `yaml:"lifetime"`
 		Domain   string `yaml:"domain"`
 	}
+	Root struct {
+		Mail     string `yaml:"mail"`
+		Password string `yaml:"password"`
+	}
 }
 
 var cachedConfig AppConfig

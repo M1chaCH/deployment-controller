@@ -33,7 +33,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// 1. check if cookie is here
 		requestToken, ok := getIdentityToken(c, idJwtContextKey)
 		if !ok || requestToken.Issuer == "" {
-			newIdToken, err := processNewClient(uuid.NewString(), c.ClientIP(), c.Request.UserAgent())
+			newIdToken, err := processNewClient(framework.GetTx(c), uuid.NewString(), c.ClientIP(), c.Request.UserAgent())
 			if err != nil {
 				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
 				AbortWithCooke(c, 500, "failed to process request")
@@ -45,7 +45,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		client, found, err := clients.LoadClientInfo(requestToken.Issuer)
+		client, found, err := clients.LoadClientInfo(framework.GetTx(c), requestToken.Issuer)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("client from cookie was not found due to internal error!, %v", err))
 			AbortWithCooke(c, 404, "some required data was not found")
@@ -53,7 +53,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		}
 		if !found {
 			logs.Warn(fmt.Sprintf("client from cookie was not found, %s", requestToken.Issuer))
-			newIdToken, err := processNewClient(requestToken.Issuer, c.ClientIP(), c.Request.UserAgent())
+			newIdToken, err := processNewClient(framework.GetTx(c), requestToken.Issuer, c.ClientIP(), c.Request.UserAgent())
 			if err != nil {
 				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
 				AbortWithCooke(c, 500, "failed to process request")

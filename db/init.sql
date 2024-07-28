@@ -62,7 +62,3 @@ create table mfa_token
     expires_at timestamp not null,
     foreign key (device_id) references client_devices(id) on delete cascade
 );
-
-GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO java;
-GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public to java;
-GRANT ALL PRIVILEGES ON ALL PROCEDURES IN SCHEMA public to java;

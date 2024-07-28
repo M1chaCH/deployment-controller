@@ -3,11 +3,11 @@ package users
 import (
 	"errors"
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/caches"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/jmoiron/sqlx"
-	"strings"
 	"time"
 )
 
@@ -16,19 +16,35 @@ var cache = caches.GetCache[UserCacheItem]()
 func InitCache() {
 	logs.Info("Initializing cache for users")
 
-	initial, err := selectAllUsers()
+	tx, err := framework.DB().Beginx()
 	if err != nil {
-		logs.Panic(fmt.Sprintf("could not initialize userEntity cache: %v", err))
+		logs.Panic(fmt.Sprintf("could not start transaction: %v", err))
+	}
+
+	err = RefreshCash(tx)
+	if err != nil {
+		panic(err)
+	}
+}
+
+func RefreshCash(tx *sqlx.Tx) error {
+	initial, err := selectAllUsers(tx)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to select all users, cache will not be up to date: %v", err))
+		return err
 	}
 
 	err = cache.Initialize(initial)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("could not initialize userEntity cache: %v", err))
+		logs.Severe(fmt.Sprintf("could not initialize userEntity cache: %v", err))
+		return err
 	}
-	logs.Info("Initialized cache for users")
+
+	logs.Info("refreshed user cache")
+	return nil
 }
 
-func LoadUsers() ([]UserCacheItem, error) {
+func LoadUsers(tx *sqlx.Tx) ([]UserCacheItem, error) {
 	if cache.IsInitialized() {
 		users, err := cache.GetAllAsArray()
 		if len(users) > 0 || err != nil {
@@ -37,14 +53,14 @@ func LoadUsers() ([]UserCacheItem, error) {
 	}
 
 	logs.Info("no users found in cache, selecting all users")
-	users, err := selectAllUsers()
+	users, err := selectAllUsers(tx)
 	if err == nil && len(users) > 0 {
 		err = cache.Initialize(users)
 	}
 	return users, err
 }
 
-func LoadUserByMail(mail string) (UserCacheItem, bool) {
+func LoadUserByMail(tx *sqlx.Tx, mail string) (UserCacheItem, bool) {
 	if cache.IsInitialized() {
 		receiver := make(chan UserCacheItem)
 		go cache.GetAll(receiver)
@@ -55,10 +71,9 @@ func LoadUserByMail(mail string) (UserCacheItem, bool) {
 		}
 	}
 
-	logs.Info("userEntity cache not initialized, selecting userEntity by mail")
-	db := framework.DB()
+	logs.Info(fmt.Sprintf("user by email not found in cache, checking db: %s", mail))
 	var result []userEntity
-	err := db.Select(&result, "select * from users where mail = $1", mail)
+	err := tx.Select(&result, "select * from users where mail = $1", mail)
 	if err != nil {
 		logs.Info("failed to select userEntity by mail: " + err.Error())
 		return UserCacheItem{}, false
@@ -68,7 +83,7 @@ func LoadUserByMail(mail string) (UserCacheItem, bool) {
 	}
 
 	user := result[0]
-	pages, err := selectPagesByUserId(user.Id)
+	userPages, err := selectPagesByUserId(tx, user.Id)
 	return UserCacheItem{
 		Id:        user.Id,
 		Mail:      user.Mail,
@@ -79,11 +94,11 @@ func LoadUserByMail(mail string) (UserCacheItem, bool) {
 		LastLogin: user.LastLogin,
 		Blocked:   user.Blocked,
 		Onboard:   user.Onboard,
-		Pages:     pages,
+		Pages:     userPages,
 	}, false
 }
 
-func LoadUserById(id string) (UserCacheItem, bool) {
+func LoadUserById(tx *sqlx.Tx, id string) (UserCacheItem, bool) {
 	if cache.IsInitialized() {
 		user, found := cache.Get(id)
 		if found {
@@ -92,9 +107,8 @@ func LoadUserById(id string) (UserCacheItem, bool) {
 	}
 
 	logs.Info(fmt.Sprintf("user not found in cache, selecting userEntity by id: %s", id))
-	db := framework.DB()
 	var result []userEntity
-	err := db.Select(&result, "select * from users where id = $1", id)
+	err := tx.Select(&result, "select * from users where id = $1", id)
 	if err != nil {
 		logs.Info("failed to select userEntity by id: " + err.Error())
 		return UserCacheItem{}, false
@@ -104,7 +118,7 @@ func LoadUserById(id string) (UserCacheItem, bool) {
 	}
 
 	user := result[0]
-	pages, err := selectPagesByUserId(user.Id)
+	userPages, err := selectPagesByUserId(tx, user.Id)
 	cacheItem := UserCacheItem{
 		Id:        user.Id,
 		Mail:      user.Mail,
@@ -115,7 +129,7 @@ func LoadUserById(id string) (UserCacheItem, bool) {
 		LastLogin: user.LastLogin,
 		Blocked:   user.Blocked,
 		Onboard:   user.Onboard,
-		Pages:     pages,
+		Pages:     userPages,
 	}
 	cache.StoreSafeBackground(cacheItem)
 	return cacheItem, true
@@ -137,7 +151,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		return UserCacheItem{}, err
 	}
 
-	userPages, err := selectPagesByUserId(id)
+	userPages, err := selectPagesByUserId(tx, id)
 	if err != nil {
 		return UserCacheItem{}, err
 	}
@@ -194,7 +208,7 @@ WHERE id = $8
 	existingUser.Blocked = blocked
 	existingUser.Onboard = onboard
 
-	newPages, err := selectPagesByUserId(id)
+	newPages, err := selectPagesByUserId(tx, id)
 	if err != nil {
 		return UserCacheItem{}, err
 	}
@@ -216,11 +230,9 @@ func DeleteUser(tx *sqlx.Tx, id string) error {
 	return err
 }
 
-func UserExists(id string) bool {
-	db := framework.DB()
-
+func UserExists(tx *sqlx.Tx, id string) bool {
 	var userId string
-	err := db.Select(&userId, "select id from users where id = $1", id)
+	err := tx.Select(&userId, "select id from users where id = $1", id)
 	if err != nil || userId == "" {
 		return false
 	}
@@ -228,55 +240,86 @@ func UserExists(id string) bool {
 	return true
 }
 
-func SimilarUserExists(id string, mail string) bool {
-	db := framework.DB()
-
+func SimilarUserExists(tx *sqlx.Tx, id string, mail string) bool {
 	var result []userEntity
-	err := db.Select(&result, "select * from users where id = $1 or mail = $2", id, mail)
+	err := tx.Select(&result, "select * from users where id = $1 or mail = $2", id, mail)
 	if err != nil || len(result) == 0 {
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to select user by mail or id: %s, %s -> %v", id, mail, err))
+		}
 		return false
 	}
 	return true
 }
 
-func selectAllUsers() ([]UserCacheItem, error) {
+func MailExists(tx *sqlx.Tx, mail string, excludedUserId string) bool {
+	var result []userEntity
+	err := tx.Select(&result, "select * from users where mail = $1 and id != $2", mail, excludedUserId)
+	if err != nil || len(result) == 0 {
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to select users by mail: %s -> %v", mail, err))
+		}
+		return false
+	}
+	return true
+}
+
+func DifferentAdminExists(tx *sqlx.Tx, excludedUserId string) bool {
+	var result []userEntity
+	err := tx.Select(&result, "select * from users where admin = true and id != $1", excludedUserId)
+	if err != nil || len(result) == 0 {
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to select users for admin check: %v", err))
+		}
+		return false
+	}
+	return true
+}
+
+func selectAllUsers(tx *sqlx.Tx) ([]UserCacheItem, error) {
 	result := make([]UserCacheItem, 0)
+
 	users := make([]userEntity, 0)
-	usersError := make(chan error)
-	allPageItems := make([]UserPageCacheItem, 0)
-	pageItemsError := make(chan error)
-	db := framework.DB()
-
-	go func() {
-		err := db.Select(&users, "SELECT * FROM users")
-		usersError <- err
-	}()
-	go func() {
-		err := db.Select(&allPageItems, `
-SELECT p.id, p.technical_name, p.url, p.title, p.description, p.private_page, up.user_id, 
-       CASE WHEN up.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS has_access
-FROM pages AS p
-LEFT JOIN user_page up ON p.id = up.page_id
-`)
-		pageItemsError <- err
-	}()
-
-	err := <-usersError
+	err := tx.Select(&users, "SELECT * FROM users")
 	if err != nil {
 		return result, err
 	}
 
-	err = <-pageItemsError
+	allPages, err := pages.LoadPages(tx)
+	if err != nil {
+		return result, err
+	}
+
+	userPageAccess := make([]userPageAccessEntity, 0)
+	err = tx.Select(&userPageAccess, "SELECT * FROM user_page")
 	if err != nil {
 		return result, err
 	}
 
 	for _, user := range users {
 		userPageItems := make([]UserPageCacheItem, 0)
-		for _, page := range allPageItems {
-			if page.UserId == user.Id {
-				userPageItems = append(userPageItems, page)
+		for _, page := range allPages {
+			page := UserPageCacheItem{
+				PageId:        page.Id,
+				TechnicalName: page.TechnicalName,
+				Url:           page.Url,
+				Title:         page.Title,
+				Description:   page.Description,
+				Private:       page.PrivatePage,
 			}
+
+			hasAccess := !page.Private
+			if page.Private {
+				for _, userPage := range userPageAccess {
+					if userPage.UserId == user.Id && userPage.PageId == page.PageId {
+						hasAccess = true
+						break
+					}
+				}
+			}
+
+			page.AccessAllowed = hasAccess
+			userPageItems = append(userPageItems, page)
 		}
 
 		result = append(result, UserCacheItem{
@@ -296,15 +339,18 @@ LEFT JOIN user_page up ON p.id = up.page_id
 	return result, nil
 }
 
-func selectPagesByUserId(userId string) ([]UserPageCacheItem, error) {
-	db := framework.DB()
+func selectPagesByUserId(tx *sqlx.Tx, userId string) ([]UserPageCacheItem, error) {
 	var userPages []UserPageCacheItem
-	err := db.Select(&userPages, `
-SELECT p.id, p.url, p.title, p.description, p.private_page, up.user_id, 
-       CASE WHEN up.user_id IS NOT NULL THEN TRUE ELSE FALSE END AS has_access
+	err := tx.Select(&userPages, `
+SELECT p.id, p.url, p.title, p.description, p.private_page, p.technical_name,
+       CASE 
+           WHEN up.user_id IS NOT NULL 
+                    OR p.private_page IS NOT TRUE 
+               THEN TRUE 
+           ELSE FALSE 
+       END AS has_access
 FROM pages AS p
-LEFT JOIN user_page up ON p.id = up.page_id
-WHERE up.user_id = $1
+LEFT JOIN user_page up ON p.id = up.page_id AND up.user_id = $1
 `, userId)
 
 	return userPages, err
@@ -315,20 +361,15 @@ func insertUserPages(tx *sqlx.Tx, userId string, pageIds []string) error {
 		return nil
 	}
 
-	query := "INSERT INTO user_page (user_id, page_id) VALUES "
-	var values []string
-	var args []interface{}
-	argIndex := 1
-
-	for _, pageId := range pageIds {
-		values = append(values, fmt.Sprintf("($%d, $%d)", argIndex, argIndex+1))
-		args = append(args, userId, pageId)
-		argIndex += 2
+	userPageAccess := make([]userPageAccessEntity, len(pageIds))
+	for i, id := range pageIds {
+		userPageAccess[i] = userPageAccessEntity{
+			UserId: userId,
+			PageId: id,
+		}
 	}
 
-	query += strings.Join(values, ",")
-
-	_, err := tx.Exec(query, args...)
+	_, err := tx.NamedExec("INSERT INTO user_page (user_id, page_id) VALUES (:user_id, :page_id)", userPageAccess)
 	return err
 }
 
@@ -337,7 +378,12 @@ func deleteUserPages(tx *sqlx.Tx, userId string, pageIds []string) error {
 		return nil
 	}
 
-	pageIdsString := "(" + strings.Join(pageIds, ",") + ")"
-	_, err := tx.Exec("DELETE FROM user_page WHERE user_id = $1 AND page_id in $2", userId, pageIdsString)
+	statement, args, err := sqlx.In("delete from user_page where user_id = ? and page_id in (?)", userId, pageIds)
+	if err != nil {
+		return err
+	}
+	statement = tx.Rebind(statement)
+
+	_, err = tx.Exec(statement, args...)
 	return err
 }

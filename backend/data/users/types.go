@@ -37,9 +37,13 @@ type UserPageCacheItem struct {
 	Description   string `json:"description" db:"description"`
 	Private       bool   `json:"private" db:"private_page"`
 	AccessAllowed bool   `json:"accessAllowed" db:"has_access"`
-	UserId        string `json:"userId,omitempty" db:"user_id"`
 }
 
 func (u UserCacheItem) GetCacheKey() string {
 	return u.Id
+}
+
+type userPageAccessEntity struct {
+	UserId string `db:"user_id"`
+	PageId string `db:"page_id"`
 }

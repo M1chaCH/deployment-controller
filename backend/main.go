@@ -69,6 +69,7 @@ func main() {
 	host := appConfig.Host
 	port := appConfig.Port
 
+	users.MakeSureAdminExists()
 	initCaches()
 
 	router := gin.Default()
@@ -105,7 +106,7 @@ func initRoutes(router *gin.Engine) {
 	openEndpoints := router.Group("/open")
 	rest.InitOpenEndpoints(openEndpoints)
 
-	// TODO make sure only admins can execute these requests
 	adminEndpoints := router.Group("/admin")
+	adminEndpoints.Use(auth.AdminAuthorisationMiddleware())
 	rest.InitAdminEndpoints(adminEndpoints)
 }

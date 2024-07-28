@@ -31,7 +31,7 @@ Scenarios
 - if user logs in, add clientId to userId
 
 3. Client X logs in with User X, logs out, logs in with User Y and Client Y
-- TODO!?!
+- TODO!?!, current logic needs to be tested
 - add agent to user Y and update client id in cookie.
 */
 
@@ -40,7 +40,12 @@ var cache = caches.GetCache[ClientCacheItem]()
 func InitCache() {
 	logs.Info("Initializing cache for clients")
 
-	initial, err := selectAllClients()
+	tx, err := framework.DB().Beginx()
+	if err != nil {
+		logs.Panic(fmt.Sprintf("could not start transaction: %v", err))
+	}
+
+	initial, err := selectAllClients(tx)
 	if err != nil {
 		logs.Panic(fmt.Sprintf("could not initialize client cache: %v", err))
 	}
@@ -52,7 +57,7 @@ func InitCache() {
 	logs.Info("Initialized cache for clients")
 }
 
-func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
+func LoadClientInfo(tx *sqlx.Tx, clientId string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		cachedItem, found := cache.Get(clientId)
 		if found {
@@ -61,29 +66,17 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	}
 
 	logs.Info(fmt.Sprintf("client not found in cache, selecting client info: %s", clientId))
-	db := framework.DB()
 	var clientDataItem []knownClientEntity
-	var devices []ClientDevice
-	knownClientError := make(chan error)
-	devicesError := make(chan error)
-
-	go func() {
-		err := db.Select(&clientDataItem, "SELECT * FROM clients WHERE id=$1", clientId)
-		knownClientError <- err
-	}()
-	go func() {
-		err := db.Select(&devices, "SELECT * FROM client_devices WHERE client_id=$1", clientId)
-		devicesError <- err
-	}()
-
-	err := <-knownClientError
+	err := tx.Select(&clientDataItem, "SELECT * FROM clients WHERE id=$1", clientId)
 	if err != nil {
 		return ClientCacheItem{}, false, err
 	}
 	if len(clientDataItem) != 1 {
 		return ClientCacheItem{}, false, fmt.Errorf("no client found by id: %s", clientId)
 	}
-	err = <-devicesError
+
+	var devices []ClientDevice
+	err = tx.Select(&devices, "SELECT * FROM client_devices WHERE client_id=$1", clientId)
 	if err != nil {
 		return ClientCacheItem{}, false, err
 	}
@@ -99,7 +92,7 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	return cacheItem, true, nil
 }
 
-func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {
+func TryFindExistingClient(tx *sqlx.Tx, ip, userAgent string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		resultChannel := make(chan ClientCacheItem)
 		go cache.GetAll(resultChannel)
@@ -120,9 +113,8 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 	}
 
 	logs.Info("client cache not initialized, selecting existing client")
-	db := framework.DB()
 	var devices []ClientDevice
-	err := db.Select(&devices, "SELECT * FROM client_devices WHERE ip_address=$1 AND user_agent=$2 LIMIT 1", ip, userAgent)
+	err := tx.Select(&devices, "SELECT * FROM client_devices WHERE ip_address=$1 AND user_agent=$2 LIMIT 1", ip, userAgent)
 	if err != nil {
 		return ClientCacheItem{}, false, err
 	}
@@ -131,7 +123,7 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 		return ClientCacheItem{}, false, nil
 	}
 
-	return LoadClientInfo(devices[0].ClientId)
+	return LoadClientInfo(tx, devices[0].ClientId)
 }
 
 func CreateNewClient(tx *sqlx.Tx, clientId string, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {
@@ -184,7 +176,7 @@ func AddDeviceToClient(tx *sqlx.Tx, clientId string, ip string, userAgent string
 	}
 
 	logs.Info(fmt.Sprintf("added new device to client: client:%s agent:%s ip:%s", clientId, userAgent, ip))
-	client, found, err := LoadClientInfo(clientId)
+	client, found, err := LoadClientInfo(tx, clientId)
 	if !found && err == nil {
 		logs.Warn(fmt.Sprintf("just inserted client, but was not found: id:%s", clientId))
 	}
@@ -203,35 +195,23 @@ func AddUserToClient(tx *sqlx.Tx, clientId string, userId string) (ClientCacheIt
 	}
 
 	logs.Info(fmt.Sprintf("added user to clinet: user:%s client:%s", userId, clientId))
-	client, found, err := LoadClientInfo(clientId)
+	client, found, err := LoadClientInfo(tx, clientId)
 	if !found && err == nil {
 		logs.Warn(fmt.Sprintf("just added user to client, but client was not found: id:%s", clientId))
 	}
 	return client, err
 }
 
-func selectAllClients() ([]ClientCacheItem, error) {
-	db := framework.DB()
+func selectAllClients(tx *sqlx.Tx) ([]ClientCacheItem, error) {
 	var result []ClientCacheItem
 	var clients []knownClientEntity
-	var devices []ClientDevice
-	knownClientsError := make(chan error)
-	devicesError := make(chan error)
-
-	go func() {
-		err := db.Select(&clients, "SELECT * FROM clients")
-		knownClientsError <- err
-	}()
-	go func() {
-		err := db.Select(&devices, "SELECT * FROM client_devices ORDER BY client_id")
-		devicesError <- err
-	}()
-
-	err := <-knownClientsError
+	err := tx.Select(&clients, "SELECT * FROM clients")
 	if err != nil {
 		return result, err
 	}
-	err = <-devicesError
+
+	var devices []ClientDevice
+	err = tx.Select(&devices, "SELECT * FROM client_devices ORDER BY client_id")
 	if err != nil {
 		return result, err
 	}

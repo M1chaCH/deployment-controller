@@ -7,6 +7,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
+	"github.com/jmoiron/sqlx"
 	"net/http"
 	"time"
 )
@@ -26,7 +27,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
 		return false
 	}
-	client, ok, err := clients.LoadClientInfo(currentRequestToken.Issuer)
+	client, ok, err := clients.LoadClientInfo(framework.GetTx(c), currentRequestToken.Issuer)
 	if err != nil {
 		logs.Warn("request has no client")
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
@@ -60,6 +61,10 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 
 	var userPagesString string
 	for i, page := range user.Pages {
+		if !page.Private {
+			continue
+		}
+
 		userPagesString += page.TechnicalName
 		if i != len(user.Pages)-1 {
 			userPagesString += JwtListDelimiter
@@ -110,8 +115,8 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 // processNewClient checks if an other client can be found by the ip and agent. if not creates the client with the given ID
 // if client was found -> clientId will change
 // not transactional -> will always save
-func processNewClient(clientId, ip, userAgent string) (IdentityToken, error) {
-	client, found, err := clients.TryFindExistingClient(ip, userAgent)
+func processNewClient(tx *sqlx.Tx, clientId, ip, userAgent string) (IdentityToken, error) {
+	client, found, err := clients.TryFindExistingClient(tx, ip, userAgent)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("no existing client found for %s:%s due to db error: %v", ip, userAgent, err))
 		return IdentityToken{}, err
@@ -147,7 +152,7 @@ func addUserToRequest(c *gin.Context) (users.UserCacheItem, bool) {
 	}
 
 	if token.UserId != "" {
-		user, ok := users.LoadUserById(token.UserId)
+		user, ok := users.LoadUserById(framework.GetTx(c), token.UserId)
 		if ok {
 			c.Set(userContextKey, user)
 			return user, true

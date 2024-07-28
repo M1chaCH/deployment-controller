@@ -3,11 +3,11 @@ package rest
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
-	"log"
 	"net/http"
 	"regexp"
 )
@@ -17,7 +17,7 @@ func InitOpenEndpoints(router *gin.RouterGroup) {
 	router.POST("/login", postLogin)
 	router.PUT("/login", putUserPassword)
 	router.POST("/login/onboard", postCompleteOnboarding)
-	router.GET("/pages", getPages)
+	router.GET("/pages", getOverviewPages)
 }
 
 var digitRegex = regexp.MustCompile(`\d`)
@@ -49,7 +49,6 @@ func postLogin(c *gin.Context) {
 
 	var dto loginDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		log.Printf("failed to bind dto from request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
@@ -59,7 +58,7 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	user, ok := users.LoadUserByMail(dto.Mail)
+	user, ok := users.LoadUserByMail(framework.GetTx(c), dto.Mail)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "login failed"})
 		return
@@ -96,9 +95,11 @@ func getCurrentUser(c *gin.Context) {
 		return
 	}
 
-	pageStrings := make([]string, len(user.Pages))
+	pageStrings := make([]string, 0)
 	for _, p := range user.Pages {
-		pageStrings = append(pageStrings, p.TechnicalName)
+		if p.Private && p.AccessAllowed {
+			pageStrings = append(pageStrings, p.TechnicalName)
+		}
 	}
 
 	body := gin.H{
@@ -145,8 +146,52 @@ func postCompleteOnboarding(c *gin.Context) {
 	}
 }
 
-func getPages(c *gin.Context) {
+type overviewPagesDto struct {
+	PageTitle       string `json:"pageTitle" binding:"required"`
+	PageDescription string `json:"pageDescription" binding:"required"`
+	PageUrl         string `json:"pageUrl" binding:"required"`
+	PrivatePage     bool   `json:"privatePage"`
+	AccessAllowed   bool   `json:"accessAllowed"`
+}
 
+func getOverviewPages(c *gin.Context) {
+	user, found := auth.GetCurrentUser(c)
+
+	result := make([]overviewPagesDto, len(user.Pages))
+	if found {
+		for i, page := range user.Pages {
+			result[i] = overviewPagesDto{
+				PageTitle:       page.Title,
+				PageDescription: page.Description,
+				PageUrl:         page.Url,
+				PrivatePage:     page.Private,
+				AccessAllowed:   page.AccessAllowed,
+			}
+		}
+
+		auth.RespondWithCookie(c, http.StatusOK, result)
+		return
+	}
+
+	allPages, err := pages.LoadPages(framework.GetTx(c))
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load all pages for overview: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not load pages"})
+		return
+	}
+
+	result = make([]overviewPagesDto, len(allPages))
+	for i, page := range allPages {
+		result[i] = overviewPagesDto{
+			PageTitle:       page.Title,
+			PageDescription: page.Description,
+			PageUrl:         page.Url,
+			PrivatePage:     page.PrivatePage,
+			AccessAllowed:   !page.PrivatePage,
+		}
+	}
+
+	auth.RespondWithCookie(c, http.StatusOK, result)
 }
 
 func changePasswordHandler(c *gin.Context, idToken auth.IdentityToken, onboarding bool) bool {
@@ -172,7 +217,7 @@ func changePasswordHandler(c *gin.Context, idToken auth.IdentityToken, onboardin
 		return false
 	}
 
-	user, ok := users.LoadUserById(dto.UserId)
+	user, ok := users.LoadUserById(framework.GetTx(c), dto.UserId)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user does not exist"})
 		return false
