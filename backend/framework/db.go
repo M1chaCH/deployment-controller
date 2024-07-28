@@ -56,6 +56,7 @@ const txContextKey = "DB_TRANSACTION"
 func TransactionMiddleware() gin.HandlerFunc {
 
 	return func(c *gin.Context) {
+		start := time.Now()
 		db := DB()
 
 		tx, err := db.Beginx()
@@ -66,7 +67,9 @@ func TransactionMiddleware() gin.HandlerFunc {
 		}
 
 		c.Set(txContextKey, tx)
+		logs.Info(fmt.Sprintf("prepare transaction: %v", time.Since(start)))
 		c.Next()
+		start = time.Now()
 
 		// why only when request succeeded?
 		// because if there was no panic, but I am aborting a request with code 404 or so, then I want the changes to be reverted
@@ -87,6 +90,8 @@ func TransactionMiddleware() gin.HandlerFunc {
 			}
 			logs.Info("transaction rolled back")
 		}
+
+		logs.Info(fmt.Sprintf("commit transaction: %v", time.Since(start)))
 	}
 }
 

@@ -4,7 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func InitAdminEndpoints(router *gin.RouterGroup) {
+func InitAdminEndpoints(router gin.IRouter) {
 	router.GET("/users", getUsers)
 	router.POST("/users", postUser)
 	router.PUT("/users", putUser)

@@ -29,6 +29,10 @@ type UserCacheItem struct {
 	Pages     []UserPageCacheItem `json:"pages"`
 }
 
+func (u UserCacheItem) GetCacheKey() string {
+	return u.Id
+}
+
 type UserPageCacheItem struct {
 	PageId        string `json:"pageId" db:"id"`
 	TechnicalName string `json:"technicalName" db:"technical_name"`
@@ -39,8 +43,12 @@ type UserPageCacheItem struct {
 	AccessAllowed bool   `json:"accessAllowed" db:"has_access"`
 }
 
-func (u UserCacheItem) GetCacheKey() string {
-	return u.Id
+func (u UserPageCacheItem) GetTechnicalName() string {
+	return u.TechnicalName
+}
+
+func (u UserPageCacheItem) GetAccessAllowed() bool {
+	return u.AccessAllowed
 }
 
 type userPageAccessEntity struct {

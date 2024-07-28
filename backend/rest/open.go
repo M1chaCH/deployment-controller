@@ -12,7 +12,7 @@ import (
 	"regexp"
 )
 
-func InitOpenEndpoints(router *gin.RouterGroup) {
+func InitOpenEndpoints(router gin.IRouter) {
 	router.GET("/login", getCurrentUser)
 	router.POST("/login", postLogin)
 	router.PUT("/login", putUserPassword)

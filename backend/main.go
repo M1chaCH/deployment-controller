@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
 	"github.com/M1chaCH/deployment-controller/data/clients"
+	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
@@ -100,6 +101,7 @@ func pong(c *gin.Context) {
 func initCaches() {
 	clients.InitCache()
 	users.InitCache()
+	pages.InitCache()
 }
 
 func initRoutes(router *gin.Engine) {
@@ -109,4 +111,6 @@ func initRoutes(router *gin.Engine) {
 	adminEndpoints := router.Group("/admin")
 	adminEndpoints.Use(auth.AdminAuthorisationMiddleware())
 	rest.InitAdminEndpoints(adminEndpoints)
+
+	auth.InitAuthRequest(router)
 }
