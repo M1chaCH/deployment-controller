@@ -54,6 +54,10 @@ func GetCurrentIdentityToken(c *gin.Context) (IdentityToken, bool) {
 	return getIdentityToken(c, updatedIdJwtContextKey)
 }
 
+func SetCurrentIdentityToken(c *gin.Context, token IdentityToken) {
+	c.Set(updatedIdJwtContextKey, token)
+}
+
 // ToJwtString converts the data to a JwtToken with a configured secret
 // does no app specific validation
 func (data IdentityToken) ToJwtString() (string, error) {

@@ -55,18 +55,20 @@ func InitCache() {
 func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		cachedItem, found := cache.Get(clientId)
-		return cachedItem, found, nil
+		if found {
+			return cachedItem, found, nil
+		}
 	}
 
-	logs.Info("client cache not initialized, selecting client info")
+	logs.Info(fmt.Sprintf("client not found in cache, selecting client info: %s", clientId))
 	db := framework.DB()
-	var client knownClientEntity
+	var clientDataItem []knownClientEntity
 	var devices []ClientDevice
 	knownClientError := make(chan error)
 	devicesError := make(chan error)
 
 	go func() {
-		err := db.Select(&client, "SELECT * FROM clients WHERE id=$1", clientId)
+		err := db.Select(&clientDataItem, "SELECT * FROM clients WHERE id=$1", clientId)
 		knownClientError <- err
 	}()
 	go func() {
@@ -78,17 +80,22 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	if err != nil {
 		return ClientCacheItem{}, false, err
 	}
+	if len(clientDataItem) != 1 {
+		return ClientCacheItem{}, false, fmt.Errorf("no client found by id: %s", clientId)
+	}
 	err = <-devicesError
 	if err != nil {
 		return ClientCacheItem{}, false, err
 	}
 
+	client := clientDataItem[0]
 	cacheItem := ClientCacheItem{
 		Id:         client.Id,
 		RealUserId: client.RealUserId.String,
 		Devices:    devices,
 	}
 
+	cache.StoreSafeBackground(cacheItem)
 	return cacheItem, true, nil
 }
 
@@ -96,13 +103,19 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 	if cache.IsInitialized() {
 		resultChannel := make(chan ClientCacheItem)
 		go cache.GetAll(resultChannel)
+		foundClients := make([]ClientCacheItem, 0)
 		for item := range resultChannel {
 			for _, device := range item.Devices {
 				if device.IpAddress == ip && device.UserAgent == userAgent {
-					return item, true, nil
+					foundClients = append(foundClients, item)
 				}
 			}
 		}
+
+		if len(foundClients) == 1 {
+			return foundClients[0], true, nil
+		}
+
 		return ClientCacheItem{}, false, nil
 	}
 
@@ -114,7 +127,7 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 		return ClientCacheItem{}, false, err
 	}
 
-	if len(devices) <= 0 {
+	if len(devices) != 1 {
 		return ClientCacheItem{}, false, nil
 	}
 
@@ -192,7 +205,7 @@ func AddUserToClient(tx *sqlx.Tx, clientId string, userId string) (ClientCacheIt
 	logs.Info(fmt.Sprintf("added user to clinet: user:%s client:%s", userId, clientId))
 	client, found, err := LoadClientInfo(clientId)
 	if !found && err == nil {
-		logs.Warn(fmt.Sprintf("just added user to client, but was not found: id:%s", clientId))
+		logs.Warn(fmt.Sprintf("just added user to client, but client was not found: id:%s", clientId))
 	}
 	return client, err
 }

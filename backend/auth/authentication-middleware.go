@@ -71,7 +71,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		if userAgent != requestToken.OriginAgent || ip != requestToken.OriginIp {
 			if client.IsDeviceKnown(ip, userAgent) {
 				token := createIdentityToken(requestToken.Issuer,
-					requestToken.Subject,
+					requestToken.UserId,
 					requestToken.Mail,
 					requestToken.Admin,
 					requestToken.LoginState,
@@ -102,9 +102,9 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		expiredAt, err := requestToken.GetExpirationTime()
 		issuedAt, err := requestToken.GetIssuedAt()
 		now := time.Now()
-		if err != nil || expiredAt.Before(now) || issuedAt.Before(now) {
+		if err != nil || expiredAt.Before(now) || issuedAt.After(now) {
 			token := createIdentityToken(requestToken.Issuer,
-				requestToken.Subject,
+				requestToken.UserId,
 				requestToken.Mail,
 				false,
 				LoginStateLoggedOut,
@@ -120,9 +120,9 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// 4. check if agent changed and logged in
 		// 5. check if logged in and user blocked
 		user, userExists := GetCurrentUser(c)
-		if requestToken.LoginState != LoginStateLoggedOut && (userAgent != requestToken.OriginAgent || !userExists || !user.Blocked) {
+		if requestToken.LoginState != LoginStateLoggedOut && (userAgent != requestToken.OriginAgent || !userExists || user.Blocked) {
 			token := createIdentityToken(requestToken.Issuer,
-				requestToken.Subject,
+				requestToken.UserId,
 				requestToken.Mail,
 				requestToken.Admin,
 				LoginStateLoggedOut,
@@ -139,7 +139,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// while waiting for two factor, ip can't change
 		if ip != requestToken.OriginIp && requestToken.LoginState == LoginStateTwofactorWaiting {
 			token := createIdentityToken(requestToken.Issuer,
-				requestToken.Subject,
+				requestToken.UserId,
 				requestToken.Mail,
 				requestToken.Admin,
 				LoginStateLoggedOut,

@@ -30,6 +30,7 @@ func IdentityJwtMiddleware() gin.HandlerFunc {
 			c.Set(idJwtContextKey, nil)
 		} else {
 			c.Set(idJwtContextKey, token)
+			c.Set(updatedIdJwtContextKey, token)
 		}
 
 		c.Next()

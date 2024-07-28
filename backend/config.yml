@@ -2,7 +2,7 @@ host: localhost
 port: 8080
 cache_type: local
 db:
-  name: deployment_controller_2
+  name: deployment_controller
   host: localhost
   port: 5432
   user: postgres

@@ -68,10 +68,10 @@ func TransactionMiddleware() gin.HandlerFunc {
 		c.Set(txContextKey, tx)
 		c.Next()
 
-		// TODO, why only when request succeeded?
-		// because if there was no panic, but i am aborting a request with code 404 or so, then I want the changes to be reverted, right?
-		// -> can't always store client updates (might get reverted later ):). -> maybe don't use transaction there?
-		if c.Writer.Status() < 300 {
+		// why only when request succeeded?
+		// because if there was no panic, but I am aborting a request with code 404 or so, then I want the changes to be reverted
+		// -> can't always store client updates -> don't use transaction for things that must always persist.
+		if c.Writer.Status() < 400 {
 			err = tx.Commit()
 			if err != nil {
 				logs.Info(fmt.Sprintf("failed to commit transaction: %s", err))
@@ -85,6 +85,7 @@ func TransactionMiddleware() gin.HandlerFunc {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "internal DB error"})
 				return
 			}
+			logs.Info("transaction rolled back")
 		}
 	}
 }

@@ -30,11 +30,18 @@ func InitCache() {
 
 func LoadUsers() ([]UserCacheItem, error) {
 	if cache.IsInitialized() {
-		return cache.GetAllAsArray()
+		users, err := cache.GetAllAsArray()
+		if len(users) > 0 || err != nil {
+			return users, err
+		}
 	}
 
-	logs.Info("userEntity cache not initialized, selecting all users")
-	return selectAllUsers()
+	logs.Info("no users found in cache, selecting all users")
+	users, err := selectAllUsers()
+	if err == nil && len(users) > 0 {
+		err = cache.Initialize(users)
+	}
+	return users, err
 }
 
 func LoadUserByMail(mail string) (UserCacheItem, bool) {
@@ -71,16 +78,20 @@ func LoadUserByMail(mail string) (UserCacheItem, bool) {
 		CreatedAt: user.CreatedAt,
 		LastLogin: user.LastLogin,
 		Blocked:   user.Blocked,
+		Onboard:   user.Onboard,
 		Pages:     pages,
 	}, false
 }
 
 func LoadUserById(id string) (UserCacheItem, bool) {
 	if cache.IsInitialized() {
-		return cache.Get(id)
+		user, found := cache.Get(id)
+		if found {
+			return user, found
+		}
 	}
 
-	logs.Info("userEntity cache not initialized, selecting userEntity by id")
+	logs.Info(fmt.Sprintf("user not found in cache, selecting userEntity by id: %s", id))
 	db := framework.DB()
 	var result []userEntity
 	err := db.Select(&result, "select * from users where id = $1", id)
@@ -94,7 +105,7 @@ func LoadUserById(id string) (UserCacheItem, bool) {
 
 	user := result[0]
 	pages, err := selectPagesByUserId(user.Id)
-	return UserCacheItem{
+	cacheItem := UserCacheItem{
 		Id:        user.Id,
 		Mail:      user.Mail,
 		Password:  user.Password,
@@ -103,8 +114,11 @@ func LoadUserById(id string) (UserCacheItem, bool) {
 		CreatedAt: user.CreatedAt,
 		LastLogin: user.LastLogin,
 		Blocked:   user.Blocked,
+		Onboard:   user.Onboard,
 		Pages:     pages,
-	}, false
+	}
+	cache.StoreSafeBackground(cacheItem)
+	return cacheItem, true
 }
 
 func InsertNewUser(tx *sqlx.Tx, id string, mail string, password string, salt []byte, admin bool, blocked bool, pageIds []string) (UserCacheItem, error) {
@@ -178,6 +192,7 @@ WHERE id = $8
 	existingUser.Admin = admin
 	existingUser.LastLogin = lastLogin
 	existingUser.Blocked = blocked
+	existingUser.Onboard = onboard
 
 	newPages, err := selectPagesByUserId(id)
 	if err != nil {
@@ -273,6 +288,7 @@ LEFT JOIN user_page up ON p.id = up.page_id
 			CreatedAt: user.CreatedAt,
 			LastLogin: user.LastLogin,
 			Blocked:   user.Blocked,
+			Onboard:   user.Onboard,
 			Pages:     userPageItems,
 		})
 	}
@@ -317,6 +333,10 @@ func insertUserPages(tx *sqlx.Tx, userId string, pageIds []string) error {
 }
 
 func deleteUserPages(tx *sqlx.Tx, userId string, pageIds []string) error {
+	if len(pageIds) < 1 {
+		return nil
+	}
+
 	pageIdsString := "(" + strings.Join(pageIds, ",") + ")"
 	_, err := tx.Exec("DELETE FROM user_page WHERE user_id = $1 AND page_id in $2", userId, pageIdsString)
 	return err
