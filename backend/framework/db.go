@@ -12,7 +12,7 @@ import (
 
 // GetTx lazy loads the transaction for the request.
 // the transaction is only started on the first execution of the inner function
-// the transaction will automatically be completed / rollback if it was started
+// the transaction will automatically be committed / rollback if it was started
 func GetTx(c *gin.Context) func() (*sqlx.Tx, error) {
 	return func() (*sqlx.Tx, error) {
 		tx := getTxFromContext(c)
@@ -77,6 +77,7 @@ func TransactionMiddleware() gin.HandlerFunc {
 
 		tx := getTxFromContext(c)
 		if tx == nil {
+			// no tx was used in this request, so no commit required
 			return
 		}
 

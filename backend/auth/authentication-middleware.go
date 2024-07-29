@@ -3,7 +3,6 @@ package auth
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/clients"
-	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -18,7 +17,7 @@ import (
 //  1. check if cookie is here
 //     no -> add new one to request
 //     add new ID Token to context
-//  2. check if has new IP or Agent -- TODO needs to match this
+//  2. check if has new IP or Agent
 //     yes -> check if combination of IP and Agent are known
 //     -- no -> add new agent and ip
 //     -- & if new agent store new agent in context (so login knows if agent was known before this request)
@@ -33,7 +32,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// 1. check if cookie is here
 		requestToken, ok := getIdentityToken(c, idJwtContextKey)
 		if !ok || requestToken.Issuer == "" {
-			newIdToken, err := processNewClient(framework.GetTx(c), uuid.NewString(), c.ClientIP(), c.Request.UserAgent())
+			newIdToken, err := processNewClient(uuid.NewString(), c.ClientIP(), c.Request.UserAgent())
 			if err != nil {
 				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
 				AbortWithCooke(c, 500, "failed to process request")
@@ -45,7 +44,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		client, found, err := clients.LoadClientInfo(framework.GetTx(c), requestToken.Issuer)
+		client, found, err := clients.LoadClientInfo(requestToken.Issuer)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("client from cookie was not found due to internal error!, %v", err))
 			AbortWithCooke(c, 404, "some required data was not found")
@@ -53,7 +52,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		}
 		if !found {
 			logs.Warn(fmt.Sprintf("client from cookie was not found, %s", requestToken.Issuer))
-			newIdToken, err := processNewClient(framework.GetTx(c), requestToken.Issuer, c.ClientIP(), c.Request.UserAgent())
+			newIdToken, err := processNewClient(requestToken.Issuer, c.ClientIP(), c.Request.UserAgent())
 			if err != nil {
 				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
 				AbortWithCooke(c, 500, "failed to process request")
@@ -82,7 +81,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 				c.Set(updatedIdJwtContextKey, token)
 				logs.Info(fmt.Sprintf("client changed to other known device: client:%s agent:%s ip:%s", requestToken.Issuer, userAgent, ip))
 			} else {
-				_, err := clients.AddDeviceToClient(framework.GetTx(c), requestToken.Issuer, ip, userAgent)
+				_, err := clients.AddDeviceToClient(requestToken.Issuer, ip, userAgent)
 				if err != nil {
 					logs.Warn(fmt.Sprintf("failed to add device to client, %v", err))
 					AbortWithCooke(c, 500, "failed to process request")

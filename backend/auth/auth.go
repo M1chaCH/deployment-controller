@@ -7,8 +7,8 @@ import (
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
-	"github.com/jmoiron/sqlx"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -27,7 +27,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
 		return false
 	}
-	client, ok, err := clients.LoadClientInfo(framework.GetTx(c), currentRequestToken.Issuer)
+	client, ok, err := clients.LoadClientInfo(currentRequestToken.Issuer)
 	if err != nil {
 		logs.Warn("request has no client")
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
@@ -36,7 +36,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 
 	// 2. make sure user and client are linked
 	if client.RealUserId == "" {
-		_, err = clients.AddUserToClient(framework.GetTx(c), client.Id, user.Id)
+		_, err = clients.AddUserToClient(client.Id, user.Id)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("could not link user with client (%s -> %s): %v", client.Id, user.Id, err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
@@ -44,7 +44,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		}
 	} else if client.RealUserId != user.Id {
 		// client has two users -> duplicate client for new user but only keep current device
-		client, err = clients.CreateNewClient(framework.GetTx(c), client.Id, user.Id, currentRequestToken.OriginIp, currentRequestToken.OriginAgent)
+		client, err = clients.CreateNewClient(client.Id, user.Id, currentRequestToken.OriginIp, currentRequestToken.OriginAgent)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to create new user for existing client: %v", err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
@@ -79,7 +79,6 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 	/*	newAgentInThisRequest, newAgentCreated := c.Get(AddedAgentContextKey)
 		// first query should never be true, second should be true if agent is unknown and third should never be false
 		if !client.IsDeviceKnown(currentRequestToken.OriginIp, currentRequestToken.OriginAgent) || (newAgentCreated && newAgentInThisRequest == currentRequestToken.OriginAgent) {
-			// TODO get private pages
 			tokenForTwoFactorAuth := createIdentityToken(client.Id,
 				user.Id,
 				user.Mail,
@@ -111,12 +110,19 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 	return true
 }
 
-// TODO needs to be synchronized across all requests
-// processNewClient checks if an other client can be found by the ip and agent. if not creates the client with the given ID
+var processNewClientMutex sync.Mutex
+
+// processNewClient checks if another client can be found by the ip and agent. if not creates the client with the given ID
 // if client was found -> clientId will change
 // not transactional -> will always save
-func processNewClient(txFunc func() (*sqlx.Tx, error), clientId, ip, userAgent string) (IdentityToken, error) {
-	client, found, err := clients.TryFindExistingClient(txFunc, ip, userAgent)
+//
+// this function can only be called once at a time per entire server -> race conditions
+// locking mechanism could later be improved with sync.Cond to only lock for specific ip & agent, but only if we hit > 10'000 concurrent users...
+func processNewClient(clientId, ip, userAgent string) (IdentityToken, error) {
+	processNewClientMutex.Lock()
+	defer processNewClientMutex.Unlock()
+
+	client, found, err := clients.TryFindExistingClient(ip, userAgent)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("no existing client found for %s:%s due to db error: %v", ip, userAgent, err))
 		return IdentityToken{}, err
@@ -124,17 +130,7 @@ func processNewClient(txFunc func() (*sqlx.Tx, error), clientId, ip, userAgent s
 
 	// client does not exist
 	if !found {
-		tx, err := framework.DB().Beginx()
-		if err != nil {
-			return IdentityToken{}, err
-		}
-
-		client, err = clients.CreateNewClient(txFunc, clientId, "", ip, userAgent)
-		if err != nil {
-			return IdentityToken{}, err
-		}
-
-		err = tx.Commit()
+		client, err = clients.CreateNewClient(clientId, "", ip, userAgent)
 		if err != nil {
 			return IdentityToken{}, err
 		}
