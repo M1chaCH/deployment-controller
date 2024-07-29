@@ -14,3 +14,5 @@ jwt:
 root:
   mail: test@mail.com
   password: test
+cors:
+  origins: https://host.michu-tech.com,http://host.localhost

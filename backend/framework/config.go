@@ -26,6 +26,9 @@ type AppConfig struct {
 		Mail     string `yaml:"mail"`
 		Password string `yaml:"password"`
 	}
+	Cors struct {
+		Origins string `yaml:"origins"`
+	}
 }
 
 var cachedConfig AppConfig

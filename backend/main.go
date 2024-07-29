@@ -12,6 +12,7 @@ import (
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"net/http"
+	"strings"
 )
 
 /*
@@ -23,7 +24,7 @@ Middlewares
 4. Auth, check if endpoint needs validation and check JWT Token
 
 CORS!!
-- ︖ only allow request from michu-tech.com...
+- only allow request from michu-tech.com...
 
 Clean Configs
 - ✔ create yml file
@@ -74,9 +75,8 @@ func main() {
 	initCaches()
 
 	router := gin.Default()
-	// TODO, i think this does nothing
 	router.Use(cors.New(cors.Config{
-		AllowOrigins:     []string{"https://michu-tech.com"},
+		AllowOrigins:     strings.Split(appConfig.Cors.Origins, ","),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowCredentials: false,
 	}))
