@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Disallow: /login
+Disallow: /onboarding
+Disallow: /admin
+Sitemap: https://michu-tech.com/sitemap.xml

@@ -1,0 +1,14 @@
+version: '3.9'
+name: dev_deployment_controller
+
+services:
+  proxy:
+    container_name: deployment_controller_dev_proxy
+    build:
+        context: .
+        dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: no
+    tty: true
