@@ -18,8 +18,8 @@ create table pages
     id          uuid unique primary key,
     technical_name varchar(255) not null unique,
     url         varchar(255) not null,
-    title       varchar(255) not null,
-    description varchar(255) not null,
+    title       varchar(40) not null,
+    description varchar(355) not null,
     private_page boolean not null default true
 );
 

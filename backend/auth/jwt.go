@@ -23,13 +23,12 @@ const updatedIdJwtContextKey = "activeIdToken"
 const JwtListDelimiter = "&&"
 
 type IdentityToken struct {
-	Mail         string `json:"mail,omitempty"`
-	Admin        bool   `json:"admin,omitempty"`
-	PrivatePages string `json:"pp,omitempty"`
-	OriginIp     string `json:"oip"`
-	OriginAgent  string `json:"agt"`
-	LoginState   string `json:"lgs"`
-	UserId       string `json:"uid,omitempty"`
+	Mail        string `json:"mail,omitempty"`
+	Admin       bool   `json:"admin,omitempty"`
+	OriginIp    string `json:"oip"`
+	OriginAgent string `json:"agt"`
+	LoginState  string `json:"lgs"`
+	UserId      string `json:"uid,omitempty"`
 	/*
 		Used RegisteredClaims
 		- Issuer -> ClientId
@@ -91,7 +90,6 @@ func createIdentityToken(
 	mail string,
 	admin bool,
 	loginState string,
-	joinedPrivatePages string,
 	ip string,
 	userAgent string,
 ) IdentityToken {
@@ -102,13 +100,12 @@ func createIdentityToken(
 	tokenLifetime *= time.Hour
 
 	return IdentityToken{
-		Mail:         mail,
-		Admin:        admin,
-		PrivatePages: joinedPrivatePages,
-		OriginIp:     ip,
-		OriginAgent:  userAgent,
-		LoginState:   loginState,
-		UserId:       userId,
+		Mail:        mail,
+		Admin:       admin,
+		OriginIp:    ip,
+		OriginAgent: userAgent,
+		LoginState:  loginState,
+		UserId:      userId,
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    clientId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),

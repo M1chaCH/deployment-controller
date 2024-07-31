@@ -78,7 +78,8 @@ func main() {
 	router.Use(cors.New(cors.Config{
 		AllowOrigins:     strings.Split(appConfig.Cors.Origins, ","),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowCredentials: false,
+		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Cookie", "Set-Cookie"},
+		AllowCredentials: true,
 	}))
 
 	router.Use(framework.TransactionMiddleware())

@@ -20,18 +20,18 @@ const addedAgentContextKey = "agent-changed"
 // 3. handle mfa
 // 4. generate success token
 // returns true: all success & cookie is updated, false: something failed, response is prepared
-func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) bool {
+func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) string {
 	// 1. get token and client
 	currentRequestToken, ok := GetCurrentIdentityToken(c)
 	if !ok {
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
-		return false
+		return LoginStateLoggedOut
 	}
 	client, ok, err := clients.LoadClientInfo(currentRequestToken.Issuer)
 	if err != nil {
 		logs.Warn("request has no client")
 		AbortWithCooke(c, http.StatusInternalServerError, "no user info found")
-		return false
+		return LoginStateLoggedOut
 	}
 
 	// 2. make sure user and client are linked
@@ -40,7 +40,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		if err != nil {
 			logs.Warn(fmt.Sprintf("could not link user with client (%s -> %s): %v", client.Id, user.Id, err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
-			return false
+			return LoginStateLoggedOut
 		}
 	} else if client.RealUserId != user.Id {
 		// client has two users -> duplicate client for new user but only keep current device
@@ -48,7 +48,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to create new user for existing client: %v", err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
-			return false
+			return LoginStateLoggedOut
 		}
 	}
 
@@ -56,7 +56,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to update last login of user: %v", err))
 		AbortWithCooke(c, http.StatusInternalServerError, "login failed")
-		return false
+		return LoginStateLoggedOut
 	}
 
 	var userPagesString string
@@ -89,7 +89,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 				currentRequestToken.OriginAgent)
 			c.Set(updatedIdJwtContextKey, tokenForTwoFactorAuth)
 			c.JSON(http.StatusOK, gin.H{"message": "require mfa"})
-			return
+			return LoginStateWaitingMfa
 		}*/
 
 	loginState := LoginStateOnboardingWaiting
@@ -103,11 +103,10 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) b
 		user.Mail,
 		user.Admin,
 		loginState,
-		userPagesString,
 		currentRequestToken.OriginIp,
 		currentRequestToken.OriginAgent)
 	SetCurrentIdentityToken(c, newToken)
-	return true
+	return loginState
 }
 
 var processNewClientMutex sync.Mutex
@@ -136,7 +135,7 @@ func processNewClient(clientId, ip, userAgent string) (IdentityToken, error) {
 		}
 	}
 
-	return createIdentityToken(client.Id, client.RealUserId, "", false, LoginStateLoggedOut, "", ip, userAgent), nil
+	return createIdentityToken(client.Id, client.RealUserId, "", false, LoginStateLoggedOut, ip, userAgent), nil
 }
 
 const userContextKey = "current-user"

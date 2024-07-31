@@ -2,26 +2,31 @@ import {PUBLIC_BACKEND_URL} from '$env/static/public';
 
 export type LoginState = "logged-in" | "logged-out" | "two-factor-waiting" | "onboarding-waiting";
 
-export interface UserInfoDto {
-  userId: string,
-  mail: string,
-  admin: boolean,
-  privatePages: string[],
-  loginState: LoginState,
+interface LoginDto {
+  mail: string;
+  password: string;
+  token?: number;
 }
 
-export async function postLogin(username: string, password: string): Promise<boolean> {
-  return true;
-}
-
-export async function getUserInfo(): Promise<UserInfoDto> {
-  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login`)
-  const data = await response.json();
+export async function postLogin(username: string, password: string, token?: number): Promise<LoginState> {
+  const dto: LoginDto = {
+    mail: username,
+    password: password,
+    token: token,
+  }
+  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include'
+  })
 
   if(response.ok) {
-    return data;
+    const data = await response.json()
+    return data.message ?? "logged-out"
   } else {
-    const message = data?.message ?? response.statusText
-    throw new Error(message)
+    return "logged-out"
   }
 }

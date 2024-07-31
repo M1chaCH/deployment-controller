@@ -63,6 +63,11 @@ a {
   text-decoration: none;
 }
 
+.subtext {
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
 .carbon-input {
   width: 100%;
   height: 80px;
@@ -106,6 +111,11 @@ a {
   margin-bottom: 0.1rem;
 }
 
+.carbon-button:disabled{
+  opacity: 0.5;
+  cursor: default;
+}
+
 .carbon-checkbox {
   width: 100%;
 
@@ -131,6 +141,11 @@ a {
   font-weight: 200;
   padding-left: 0.6rem;
   cursor: pointer;
+}
+
+.carbon-checkbox:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .icon-button {
@@ -195,6 +210,11 @@ a {
   box-sizing: border-box;
 
   color: var(--michu-tech-foreground);
+}
+
+.carbon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .carbon-button .icon {

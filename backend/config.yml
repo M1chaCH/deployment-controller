@@ -10,9 +10,9 @@ db:
 jwt:
   secret: ZG9uJ3QgZG8gdGhpcw==
   lifetime: 168 #hous
-  domain: localhost
+  domain: michu-tech-dev.net
 root:
   mail: test@mail.com
   password: test
 cors:
-  origins: https://host.michu-tech.com,http://host.localhost
+  origins: https://host.michu-tech.com,http://host.michu-tech-dev.net

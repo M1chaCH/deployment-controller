@@ -38,7 +38,7 @@ func postLogin(c *gin.Context) {
 
 	// TODO, do we really want this? this will let a user through even if his password is incorrect.
 	if idToken.LoginState == auth.LoginStateLoggedIn || idToken.LoginState == auth.LoginStateOnboardingWaiting {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "logged in"})
+		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": auth.LoginStateLoggedIn})
 		return
 	}
 
@@ -76,9 +76,9 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	ok = auth.HandleLoginWithValidCredentials(c, user)
-	if ok {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "login successful"})
+	state := auth.HandleLoginWithValidCredentials(c, user)
+	if state != auth.LoginStateLoggedOut {
+		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": state})
 	}
 }
 
@@ -95,19 +95,12 @@ func getCurrentUser(c *gin.Context) {
 		return
 	}
 
-	pageStrings := make([]string, 0)
-	for _, p := range user.Pages {
-		if p.Private && p.AccessAllowed {
-			pageStrings = append(pageStrings, p.TechnicalName)
-		}
-	}
-
 	body := gin.H{
-		"userId":       user.Id,
-		"mail":         user.Mail,
-		"admin":        user.Admin,
-		"privatePages": pageStrings,
-		"loginState":   idToken.LoginState,
+		"userId":     user.Id,
+		"mail":       user.Mail,
+		"admin":      user.Admin,
+		"onboard":    user.Onboard,
+		"loginState": idToken.LoginState,
 	}
 	auth.RespondWithCookie(c, http.StatusOK, body)
 }

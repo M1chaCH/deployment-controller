@@ -75,7 +75,6 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 					requestToken.Mail,
 					requestToken.Admin,
 					requestToken.LoginState,
-					requestToken.PrivatePages,
 					requestIp,
 					requestAgent)
 
@@ -108,7 +107,6 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 				requestToken.Mail,
 				false,
 				LoginStateLoggedOut,
-				requestToken.PrivatePages,
 				requestIp,
 				requestAgent)
 
@@ -126,7 +124,6 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 				requestToken.Mail,
 				requestToken.Admin,
 				LoginStateLoggedOut,
-				requestToken.PrivatePages,
 				requestIp,
 				requestAgent)
 
@@ -143,7 +140,6 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 				requestToken.Mail,
 				requestToken.Admin,
 				LoginStateLoggedOut,
-				requestToken.PrivatePages,
 				requestIp,
 				requestAgent)
 
