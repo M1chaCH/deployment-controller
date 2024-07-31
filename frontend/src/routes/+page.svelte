@@ -1,7 +1,7 @@
 <script lang="ts">
     import {isErrorDto} from '$lib/api/open';
     import {pagesStore} from '$lib/api/store';
-    import PageOutline from '$lib/PageOutline.svelte';
+    import PageOutline from '$lib/components/PageOutline.svelte';
 </script>
 
 <PageOutline pageName="Home">

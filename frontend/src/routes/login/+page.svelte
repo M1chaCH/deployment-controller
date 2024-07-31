@@ -2,14 +2,11 @@
     import {type LoginState, postLogin} from '$lib/api/auth.js';
     import {isErrorDto} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
-    import MiniNotification from '$lib/MiniNotification.svelte';
-    import PageOutline from '$lib/PageOutline.svelte';
+    import MiniNotification from '$lib/components/MiniNotification.svelte';
+    import PageOutline from '$lib/components/PageOutline.svelte';
     import {onMount} from 'svelte';
 
     onMount(() => {
-        // TODO user is never logged in -> cookie never sent to backend
-        //  -> samesite looks at the two last domains (host.localhost & host.backend.localhost)
-        // -> try "host.dev.localhost", "teachu.dev.localhost"... does this solve issue?
         userStore.subscribe(user => {
             if(user && !isErrorDto(user)) {
                 mail = user.mail;
@@ -85,7 +82,7 @@
         <p class="subtext">An account needs to be created by the admin.</p>
     </div>
     <div slot="content" class="page" id="login">
-        <div class="login-card">
+        <div class="content-card">
             <form class="login-inputs">
                 <div class="carbon-input">
                     <label for="mail">E-Mail</label>
@@ -127,15 +124,6 @@
         min-height: calc(100vh - 4rem);
         align-items: center;
         justify-content: center;
-    }
-
-    .login-card {
-        border-left: 1px solid var(--controller-line-color);
-        background-color: var(--controller-area-color);
-
-        min-width: 220px;
-        width: 80vw;
-        max-width: 480px;
     }
 
     .login-inputs {

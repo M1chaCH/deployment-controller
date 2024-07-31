@@ -7,6 +7,10 @@ export interface ApiErrorDto {
   statusText: string;
 }
 
+export interface ApiSuccessDto {
+  message: string
+}
+
 export interface UserInfoDto {
   userId: string,
   mail: string,
@@ -21,6 +25,12 @@ export interface PageDto {
   pageUrl: string;
   privatePage: boolean;
   accessAllowed: boolean;
+}
+
+export interface ChangePasswordDto {
+  userId: string;
+  oldPassword?: string;
+  newPassword: string;
 }
 
 export function isErrorDto(obj: object | null | undefined): obj is ApiErrorDto {
@@ -52,6 +62,27 @@ export async function getPages(): Promise<PageDto[] | ApiErrorDto> {
   })
   const data = await response.json()
 
+  if(response.ok) {
+    return data;
+  } else {
+    return {
+      message: data?.message ?? response.statusText,
+      status: response.status,
+      statusText: response.statusText,
+    }
+  }
+}
+
+export async function putChangePassword(dto: ChangePasswordDto): Promise<ApiErrorDto | ApiSuccessDto> {
+  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login`, {
+    credentials: 'include',
+    method: 'PUT',
+    body: JSON.stringify(dto),
+    headers: {
+      'Content-Type': 'application/json'
+    },
+  })
+  const data = await response.json()
   if(response.ok) {
     return data;
   } else {

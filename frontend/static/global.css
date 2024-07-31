@@ -289,4 +289,32 @@ a {
   color: color-mix(in srgb, var(--michu-tech-accent) 80%, var(--michu-tech-foreground));
 }
 
+.wrapper-button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  height: 100%;
+}
 
+.backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  backdrop-filter: brightness(60%) blur(2px);
+}
+
+.content-card {
+  border-left: 1px solid var(--controller-line-color);
+  background-color: var(--controller-area-color);
+
+  min-width: 220px;
+  width: 80vw;
+  max-width: 480px;
+}

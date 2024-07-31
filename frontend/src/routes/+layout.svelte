@@ -3,7 +3,9 @@
     import {userStore} from '$lib/api/store';
     import logo from '$lib/assets/michu-tech-icon-black-white.svg';
     import ThemeSwitcher from '$lib/colors/ThemeSwitcher.svelte';
-    import ProfileImage from '$lib/ProfileImage.svelte';
+    import ChangePassword from '$lib/components/ChangePassword.svelte';
+    import ProfileImage from '$lib/components/ProfileImage.svelte';
+    import UserPopover from '$lib/components/UserPopover.svelte';
 
     let username = "unknown"
     userStore.subscribe(user => {
@@ -11,6 +13,9 @@
             username = user.mail.split("@")[0] ?? "unknown"
         }
     })
+
+    let userPopoverOpen = false;
+    let changePasswordOpen = false;
 </script>
 
 <header>
@@ -22,7 +27,9 @@
         <ThemeSwitcher />
 
         {#if $userStore !== null && !isErrorDto($userStore) && $userStore.loginState !== "logged-out" }
-            <ProfileImage bind:username/>
+            <button class="wrapper-button" on:click={() => userPopoverOpen = !userPopoverOpen}>
+                <ProfileImage bind:username/>
+            </button>
         {:else }
             <a id="largeLoginButton" class="carbon-button secondary" href="/login#login">
                 Login
@@ -69,6 +76,16 @@
         </div>
     </div>
 </footer>
+
+{#if $userStore && !isErrorDto($userStore)}
+    {#if userPopoverOpen}
+        <UserPopover user={$userStore} on:close={() => userPopoverOpen = false} on:changePassword={() => { userPopoverOpen = false; changePasswordOpen = true; }}/>
+    {/if}
+
+    {#if changePasswordOpen}
+        <ChangePassword userId={$userStore.userId} on:close={() => changePasswordOpen = false} />
+    {/if}
+{/if}
 
 <style>
     header {
