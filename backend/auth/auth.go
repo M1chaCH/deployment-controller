@@ -7,6 +7,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"net/http"
 	"sync"
 	"time"
@@ -44,7 +45,7 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) s
 		}
 	} else if client.RealUserId != user.Id {
 		// client has two users -> duplicate client for new user but only keep current device
-		client, err = clients.CreateNewClient(client.Id, user.Id, currentRequestToken.OriginIp, currentRequestToken.OriginAgent)
+		client, err = clients.CreateNewClient(uuid.NewString(), user.Id, currentRequestToken.OriginIp, currentRequestToken.OriginAgent)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to create new user for existing client: %v", err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")

@@ -1,6 +1,8 @@
 <script lang="ts">
     import {isErrorDto} from '$lib/api/open';
-    import {pagesStore} from '$lib/api/store';
+    import {pagesStore, userStore} from '$lib/api/store';
+    import AppCard from '$lib/components/AppCard.svelte';
+    import FetchFailed from '$lib/components/FetchFailed.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
 </script>
 
@@ -8,81 +10,39 @@
     <div slot="description">
         <p>This page shows all applications that are deployed on my server. Feel free to explore and get to know my projects more closely.</p>
         <p class="subtext">Some might be locked, you need to have special access for these.</p>
+        {#if $userStore && !isErrorDto($userStore) && !$userStore.onboard }
+            <p style="margin-top: 2rem;">Your are not yet onboard. Make sure to <a href="/onboarding#onboarding" style="text-decoration: underline; color: var(--michu-tech-accent);">complete your setup</a> to access private pages.</p>
+        {/if}
     </div>
     <div slot="content">
         <h3>Deployments</h3>
         {#if $pagesStore !== null && !isErrorDto($pagesStore) }
             <div class="page-container">
                 {#each $pagesStore as page }
-                    <div class="page-card">
-                        <h4>{page.pageTitle}</h4>
-                        <div class="page-content">
-                            <p>{page.pageDescription}</p>
+                    <AppCard title={page.pageTitle}>
+                        <p slot="content">{page.pageDescription}</p>
+                        <div slot="footer">
+                            <a class="page-link" class:disabled={!page.accessAllowed} href={page.accessAllowed ? page.pageUrl : ""}>
+                                <span class="material-symbols-outlined">jump_to_element</span>
+                            </a>
+                            {#if !page.accessAllowed }
+                                <p class="page-no-access">Locked</p>
+                            {/if}
                         </div>
-                        <a class="page-link" class:disabled={!page.accessAllowed} href={page.accessAllowed ? page.pageUrl : ""}>
-                            <span class="material-symbols-outlined">jump_to_element</span>
-                        </a>
-                        {#if !page.accessAllowed }
-                            <p class="page-no-access">Locked</p>
-                        {/if}
-                    </div>
+                    </AppCard>
                 {/each}
             </div>
         {:else}
-            <div class="error-container">
-                <h4>Pages could not be loaded.</h4>
-                <p class="page-load-failed">{`${$pagesStore?.status ?? '000'} - ${$pagesStore?.statusText ?? 'unknown error'}`}</p>
-                {#if $pagesStore?.message}
-                    <p>{$pagesStore.message}</p>
-                {/if}
-            </div>
+            <FetchFailed error={$pagesStore} />
         {/if}
     </div>
 </PageOutline>
 
 <style>
-    .error-container {
-        display: flex;
-        flex-flow: column;
-        justify-content: center;
-        gap:1rem;
-        height: 100%;
-    }
-
-    .error-container .page-load-failed {
-        font-size: 8cqw;
-        font-weight: 600;
-        letter-spacing: 0.1rem;
-    }
-
     .page-container {
         display: flex;
         flex-flow: row wrap;
         gap: 2rem;
-    }
-
-    .page-card {
-        flex: 1 1 30%;
-        min-width: 300px;
-        max-width: 780px;
-        min-height: 360px;
-
-        box-sizing: border-box;
-
-        display: flex;
-        flex-flow: column;
-    }
-
-    .page-card h4 {
-        margin: 1rem 0 0.2rem 1rem;
-    }
-
-    .page-content {
-        border-left: 2px solid var(--controller-line-color);
-        background-color: var(--controller-area-color);
-        flex: 4;
-        padding: 1rem;
-        box-sizing: border-box;
     }
 
     .page-link {

@@ -118,6 +118,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// 4. check if agent changed and logged in
 		// 5. check if logged in and user blocked
 		user, userExists := GetCurrentUser(c)
+		// fixme -> sometimes agent changed when not actually changed (on chrome mobile guy)
 		if requestToken.LoginState != LoginStateLoggedOut && (requestAgent != requestToken.OriginAgent || !userExists || user.Blocked) {
 			token := createIdentityToken(requestToken.Issuer,
 				requestToken.UserId,

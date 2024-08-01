@@ -13,7 +13,7 @@ func AdminAuthorisationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		if !idToken.Admin {
+		if idToken.LoginState != LoginStateLoggedIn || !idToken.Admin {
 			AbortWithCooke(c, http.StatusForbidden, "access denied")
 			return
 		}

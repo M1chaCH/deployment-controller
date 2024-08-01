@@ -307,7 +307,8 @@ a {
   align-items: center;
   justify-content: center;
 
-  backdrop-filter: brightness(60%) blur(2px);
+  backdrop-filter: blur(2px);
+  background-color: color-mix(in srgb, var(--michu-tech-black) 40%, transparent);
 }
 
 .content-card {

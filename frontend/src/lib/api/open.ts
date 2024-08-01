@@ -73,10 +73,11 @@ export async function getPages(): Promise<PageDto[] | ApiErrorDto> {
   }
 }
 
-export async function putChangePassword(dto: ChangePasswordDto): Promise<ApiErrorDto | ApiSuccessDto> {
-  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login`, {
+export async function putChangePassword(dto: ChangePasswordDto, onboarding: boolean = false): Promise<ApiErrorDto | ApiSuccessDto> {
+  const urlSuffix = onboarding ? "/open/login/onboard" : "/open/login";
+  const response = await fetch(`${PUBLIC_BACKEND_URL}${urlSuffix}`, {
     credentials: 'include',
-    method: 'PUT',
+    method: onboarding ? 'POST' : 'PUT',
     body: JSON.stringify(dto),
     headers: {
       'Content-Type': 'application/json'

@@ -195,7 +195,7 @@
         display: flex;
         flex-flow: column;
         justify-content: center;
-        align-items: center;
+        align-items: flex-start;
         min-height: 50vh;
         padding: 1vh 5vw;
         box-sizing: border-box;
@@ -224,8 +224,12 @@
     }
 
     #footerName {
-        font-weight: 600;
-        font-size: 3rem;
+        font-weight: 200;
+        font-size: 2.5rem;
         text-align: center;
+    }
+
+    #footerTitle {
+        font-weight: 600;
     }
 </style>

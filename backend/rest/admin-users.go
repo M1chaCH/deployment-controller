@@ -9,11 +9,30 @@ import (
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"regexp"
+	"time"
 )
 
 const emailPattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 
 var emailRegex = regexp.MustCompile(emailPattern)
+
+type AdminUserDto struct {
+	UserId     string          `json:"userId"`
+	Mail       string          `json:"mail"`
+	Admin      bool            `json:"admin"`
+	Blocked    bool            `json:"blocked"`
+	Onboard    bool            `json:"onboard"`
+	CreatedAt  time.Time       `json:"createdAt"`
+	LastLogin  time.Time       `json:"lastLogin"`
+	PageAccess []PageAccessDto `json:"pageAccess"`
+}
+
+type PageAccessDto struct {
+	PageId        string `json:"pageId"`
+	TechnicalName string `json:"technicalName"`
+	AccessAllowed bool   `json:"accessAllowed"`
+	PagePrivate   bool   `json:"pagePrivate"`
+}
 
 func getUsers(c *gin.Context) {
 	result, err := users.LoadUsers(framework.GetTx(c))
@@ -24,26 +43,46 @@ func getUsers(c *gin.Context) {
 	}
 
 	// don't want so send salt and password
-	for i, r := range result {
-		r.Password = ""
-		r.Salt = make([]byte, 0)
-		result[i] = r
+	dtos := make([]AdminUserDto, len(result))
+	for i, user := range result {
+		pageAccess := make([]PageAccessDto, 0)
+		for _, page := range user.Pages {
+			pageAccess = append(pageAccess, PageAccessDto{
+				PageId:        page.PageId,
+				TechnicalName: page.TechnicalName,
+				AccessAllowed: page.AccessAllowed,
+				PagePrivate:   page.Private,
+			})
+		}
+
+		dtos[i] = AdminUserDto{
+			UserId:     user.Id,
+			Mail:       user.Mail,
+			Admin:      user.Admin,
+			Blocked:    user.Blocked,
+			Onboard:    user.Onboard,
+			CreatedAt:  user.CreatedAt,
+			LastLogin:  user.LastLogin,
+			PageAccess: pageAccess,
+		}
 	}
 
-	auth.RespondWithCookie(c, http.StatusOK, result)
+	auth.RespondWithCookie(c, http.StatusOK, dtos)
 }
 
-type newUserDto struct {
-	UserId       string   `json:"userId" binding:"required"`
-	Mail         string   `json:"mail"`
-	Password     string   `json:"password"`
-	Admin        bool     `json:"admin"`
-	Blocked      bool     `json:"blocked"`
-	PrivatePages []string `json:"privatePages"`
+type editUserDto struct {
+	UserId      string   `json:"userId" binding:"required"`
+	Mail        string   `json:"mail" binding:"required"`
+	Password    string   `json:"password,omitempty"`
+	Admin       bool     `json:"admin"`
+	Blocked     bool     `json:"blocked"`
+	Onboard     bool     `json:"onboard,omitempty"`
+	AddPages    []string `json:"addPages,omitempty"`
+	RemovePages []string `json:"removePages,omitempty"`
 }
 
 func postUser(c *gin.Context) {
-	var dto newUserDto
+	var dto editUserDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		logs.Info(fmt.Sprintf("failed to bind user from request: %v", err))
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
@@ -67,7 +106,7 @@ func postUser(c *gin.Context) {
 		return
 	}
 
-	_, err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.PrivatePages)
+	_, err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not insert new user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
@@ -75,16 +114,6 @@ func postUser(c *gin.Context) {
 	}
 
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "user created"})
-}
-
-type editUserDto struct {
-	UserId      string   `json:"userId" binding:"required"`
-	Mail        string   `json:"mail" binding:"required"`
-	Admin       bool     `json:"admin"`
-	Blocked     bool     `json:"blocked"`
-	Onboard     bool     `json:"onboard"`
-	AddPages    []string `json:"addPages,omitempty"`
-	RemovePages []string `json:"removePages,omitempty"`
 }
 
 func putUser(c *gin.Context) {

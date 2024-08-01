@@ -5,9 +5,10 @@
     import {createEventDispatcher, onMount} from 'svelte';
 
     export let userId: string;
+    export let targetOtherUserEmail: string | undefined = undefined;
     let oldPassword: string;
     let password: string;
-    $: invalid = !oldPassword || !password || oldPassword === password;
+    $: invalid = (!targetOtherUserEmail && !oldPassword) || !password || oldPassword === password;
 
     let changeFailed = false;
 
@@ -35,11 +36,16 @@
     <div class="content-card">
         <form class="change-password-form">
             <h4>Change Password</h4>
+            {#if targetOtherUserEmail}
+                <p class="subtext">For {targetOtherUserEmail}</p>
+            {/if}
             <p>The new password must be different to the first one and must match the following criteria. [ >= 8 Letters, min. 1 number, min. 1 a-z, min. 1 A-Z ]</p>
-            <div class="carbon-input">
-                <label for="oldPassword">Old password</label>
-                <input autocomplete="current-password" id="oldPassword" bind:value={oldPassword} type="password"/>
-            </div>
+            {#if !targetOtherUserEmail}
+                <div class="carbon-input">
+                    <label for="oldPassword">Old password</label>
+                    <input autocomplete="current-password" id="oldPassword" bind:value={oldPassword} type="password"/>
+                </div>
+            {/if}
             <div class="carbon-input">
                 <label for="newPassword">New password</label>
                 <input id="newPassword" bind:value={password} type="password" autocomplete="new-password"/>

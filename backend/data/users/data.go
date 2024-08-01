@@ -370,7 +370,7 @@ func selectAllUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
 			}
 
 			hasAccess := !page.Private
-			if page.Private {
+			if page.Private && user.Onboard {
 				for _, userPage := range userPageAccess {
 					if userPage.UserId == user.Id && userPage.PageId == page.PageId {
 						hasAccess = true
