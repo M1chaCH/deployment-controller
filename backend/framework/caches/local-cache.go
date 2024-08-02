@@ -55,7 +55,7 @@ func (c *localItemsCache[T]) Get(key string) (T, bool) {
 		return result, ok
 	}
 
-	return result, c.isItemValid(item)
+	return item.Item, c.isItemValid(item)
 }
 
 func (c *localItemsCache[T]) GetAll(result chan T) {

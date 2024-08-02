@@ -227,7 +227,7 @@
                             <div style="height: 1px; width: 75%; background-color: var(--controller-line-color); margin: 1rem 0;"></div>
                             <button class="carbon-button flat" on:click={() => viewDevices = user.devices}>
                                 View Devices
-                                <span class="material-symbols-outlined">unfold_more
+                                <span class="material-symbols-outlined">unfold_more</span>
                             </button>
                         </div>
                         <div slot="footer" class="controls">
@@ -423,7 +423,9 @@
                     </div>
                     <div class="labeled-value">
                         <label for={`${device.deviceId}-location`}>Location</label>
-                        <p id={`${device.deviceId}-location`}>...</p>
+                        <p id={`${device.deviceId}-location`}>
+                            {device.city}, {device.subdivision}, {device.country} - {device.systemOrganisation}
+                        </p>
                     </div>
                     <div class="labeled-value">
                         <label for={`${device.deviceId}-clientId`}>Client ID</label>

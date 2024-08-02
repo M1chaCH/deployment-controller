@@ -105,12 +105,16 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 }
 
 type UserDevicesDto struct {
-	UserId    string    `json:"userId" db:"user_id"`
-	ClientId  string    `json:"clientId" db:"client_id"`
-	DeviceId  string    `json:"deviceId" db:"device_id"`
-	Ip        string    `json:"ip" db:"ip_address"`
-	Agent     string    `json:"userAgent" db:"user_agent"`
-	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+	UserId             string    `json:"userId" db:"user_id"`
+	ClientId           string    `json:"clientId" db:"client_id"`
+	DeviceId           string    `json:"deviceId" db:"device_id"`
+	Ip                 string    `json:"ip" db:"ip_address"`
+	Agent              string    `json:"userAgent" db:"user_agent"`
+	City               string    `json:"city" db:"city"`
+	Subdivision        string    `json:"subdivision" db:"subdivision"`
+	Country            string    `json:"country" db:"country"`
+	SystemOrganisation string    `json:"systemOrganisation" db:"system_organisation"`
+	CreatedAt          time.Time `json:"createdAt" db:"created_at"`
 }
 
 func SelectDevicesByUsers(userIds []string) ([]UserDevicesDto, error) {
@@ -119,9 +123,11 @@ func SelectDevicesByUsers(userIds []string) ([]UserDevicesDto, error) {
 	}
 
 	statement, args, err := sqlx.In(`
-SELECT c.real_user_id as user_id, d.client_id, d.id as device_id, d.user_agent, d.ip_address, d.created_at
+SELECT c.real_user_id as user_id, d.client_id, d.id as device_id, d.user_agent, d.ip_address, d.created_at, 
+       il.city_name as city, il.subdivision_code as subdivision, il.country_code as country, il.system_organisation as system_organisation
 FROM client_devices as d
     LEFT JOIN public.clients c on c.id = d.client_id
+    LEFT JOIN public.ip_locations il on d.id = il.device_id
 WHERE c.real_user_id in (?)
 ORDER BY d.created_at DESC
 `, userIds)

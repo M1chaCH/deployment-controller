@@ -35,6 +35,10 @@ export interface AdminUserDeviceDto {
   clientId: string,
   ip: string,
   userAgent: string,
+  city: string,
+  subdivision: string,
+  country: string,
+  systemOrganisation: string,
 }
 
 export interface AdminEditUserDto {
