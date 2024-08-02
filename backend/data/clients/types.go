@@ -12,11 +12,13 @@ type knownClientEntity struct {
 }
 
 type ClientDevice struct {
-	Id        string    `db:"id"`
-	CreatedAt time.Time `db:"created_at"`
-	ClientId  string    `db:"client_id"`
-	UserAgent string    `db:"user_agent"`
-	IpAddress string    `db:"ip_address"`
+	Id                   string         `db:"id"`
+	CreatedAt            time.Time      `db:"created_at"`
+	ClientId             string         `db:"client_id"`
+	UserAgent            string         `db:"user_agent"`
+	IpAddress            string         `db:"ip_address"`
+	IpLocationCheckError sql.NullString `db:"ip_location_check_error"`
+	IpIsPrivate          sql.NullBool   `db:"ip_is_private"`
 }
 
 type ClientCacheItem struct {

@@ -5,11 +5,19 @@ import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"reflect"
+	"time"
 )
+
+type localCachedItem[T CachedItem] struct {
+	Item     T
+	CachedAt time.Time
+}
 
 type localItemsCache[T CachedItem] struct {
 	initialized bool
-	cache       map[string]T
+	lifetime    time.Duration
+	hasLifetime bool
+	cache       map[string]localCachedItem[T]
 }
 
 func (c *localItemsCache[T]) IsInitialized() bool {
@@ -22,11 +30,14 @@ func (c *localItemsCache[T]) IsInitialized() bool {
 
 func (c *localItemsCache[T]) Initialize(items []T) error {
 	if c.cache == nil {
-		c.cache = make(map[string]T)
+		c.cache = make(map[string]localCachedItem[T])
 	}
 
 	for _, entity := range items {
-		c.cache[entity.GetCacheKey()] = entity
+		c.cache[entity.GetCacheKey()] = localCachedItem[T]{
+			Item:     entity,
+			CachedAt: time.Now(),
+		}
 	}
 
 	c.initialized = true
@@ -39,8 +50,12 @@ func (c *localItemsCache[T]) Get(key string) (T, bool) {
 		return result, false
 	}
 
-	result, ok := c.cache[key]
-	return result, ok
+	item, ok := c.cache[key]
+	if !ok {
+		return result, ok
+	}
+
+	return result, c.isItemValid(item)
 }
 
 func (c *localItemsCache[T]) GetAll(result chan T) {
@@ -50,7 +65,9 @@ func (c *localItemsCache[T]) GetAll(result chan T) {
 	}
 
 	for _, value := range c.cache {
-		result <- value
+		if c.isItemValid(value) {
+			result <- value.Item
+		}
 	}
 	close(result)
 }
@@ -62,7 +79,9 @@ func (c *localItemsCache[T]) GetAllAsArray() ([]T, error) {
 
 	result := make([]T, 0, len(c.cache))
 	for _, value := range c.cache {
-		result = append(result, value)
+		if c.isItemValid(value) {
+			result = append(result, value.Item)
+		}
 	}
 
 	return result, nil
@@ -73,7 +92,10 @@ func (c *localItemsCache[T]) Store(entity T) error {
 		return errors.New("cache not initialized")
 	}
 
-	c.cache[entity.GetCacheKey()] = entity
+	c.cache[entity.GetCacheKey()] = localCachedItem[T]{
+		Item:     entity,
+		CachedAt: time.Now(),
+	}
 	return nil
 }
 
@@ -96,4 +118,24 @@ func (c *localItemsCache[T]) Remove(id string) error {
 
 func (c *localItemsCache[T]) Clear() {
 	c.cache = nil
+}
+
+func (c *localItemsCache[T]) SetLifetime(duration time.Duration) {
+	c.hasLifetime = true
+	c.lifetime = duration
+}
+
+func (c *localItemsCache[T]) isItemValid(item localCachedItem[T]) bool {
+	if !c.hasLifetime {
+		return true
+	}
+
+	lastValidAt := time.Now().Add(-c.lifetime)
+	itemValid := lastValidAt.After(item.CachedAt)
+
+	if !itemValid {
+		delete(c.cache, item.Item.GetCacheKey())
+	}
+
+	return itemValid
 }

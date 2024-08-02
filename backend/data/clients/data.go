@@ -86,7 +86,7 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 		return ClientCacheItem{}, false, err
 	}
 	if len(clientDataItem) != 1 {
-		return ClientCacheItem{}, false, fmt.Errorf("no client found by id: %s", clientId)
+		return ClientCacheItem{}, false, nil
 	}
 	err = <-devicesError
 	if err != nil {
@@ -135,6 +135,35 @@ ORDER BY d.created_at DESC
 	var result []UserDevicesDto
 	err = db.Select(&result, statement, args...)
 	return result, err
+}
+
+type DeviceWithNoLocation struct {
+	DeviceId  string `json:"deviceId" db:"device_id"`
+	IpAddress string `json:"ipAddress" db:"ip_address"`
+}
+
+func SelectDevicesWithNoLocation() ([]DeviceWithNoLocation, error) {
+	db := framework.DB()
+
+	var devices []DeviceWithNoLocation
+	err := db.Select(&devices, `
+SELECT d.id as device_id, d.ip_address
+FROM client_devices as d
+         LEFT JOIN public.ip_locations il on d.id = il.device_id
+WHERE CASE WHEN il.device_id IS NULL THEN TRUE ELSE FALSE END
+  AND (d.ip_location_check_error IS NULL OR d.ip_location_check_error = '')
+  AND d.ip_is_private IS NOT TRUE
+`)
+
+	return devices, err
+}
+
+func UpdateDeviceAfterLocationCheck(deviceId string, isPrivate bool, otherError string) error {
+	db := framework.DB()
+	_, err := db.Exec(`
+UPDATE client_devices SET ip_location_check_error = $1, ip_is_private = $2 WHERE id = $3
+`, otherError, isPrivate, deviceId)
+	return err
 }
 
 func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {

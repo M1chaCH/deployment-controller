@@ -1,5 +1,7 @@
 package caches
 
+import "time"
+
 type CachedItem interface {
 	GetCacheKey() string
 }
@@ -16,6 +18,7 @@ type ItemsCache[T CachedItem] interface {
 	StoreSafeBackground(item T)
 	Remove(id string) error
 	Clear()
+	SetLifetime(duration time.Duration)
 }
 
 func GetCache[T CachedItem]() ItemsCache[T] {

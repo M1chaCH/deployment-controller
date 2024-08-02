@@ -8,6 +8,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/M1chaCH/deployment-controller/location"
 	"github.com/M1chaCH/deployment-controller/mail"
 	"github.com/M1chaCH/deployment-controller/rest"
 	"github.com/gin-contrib/cors"
@@ -52,7 +53,7 @@ Mail
 Identity
 - if user logged in -> userId or similar
 - else -> Agent X IP -> store Id in agent -> use stored Id, so agent / ip can change
-- track locations from IP (maybe even from nginx plugin)
+- track location from IP (maybe even from nginx plugin)
 
 Docker
 
@@ -73,6 +74,7 @@ func main() {
 	port := appConfig.Port
 
 	users.MakeSureAdminExists()
+	location.InitScheduledLocationCheck()
 	initCaches()
 
 	router := gin.Default()
@@ -102,6 +104,7 @@ func pong(c *gin.Context) {
 
 func initCaches() {
 	mail.InitTemplates()
+	location.InitCache()
 	clients.InitCache()
 	users.InitCache()
 	pages.InitCache()
