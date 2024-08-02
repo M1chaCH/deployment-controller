@@ -70,14 +70,16 @@ a {
 
 .carbon-input {
   width: 100%;
-  height: 80px;
+  min-height: 80px;
 
   display: flex;
   flex-flow: column;
   gap: 0;
+
+  position: relative;
 }
 
-.carbon-input input {
+.carbon-input input, .carbon-input textarea {
   outline: none;
   border: none;
   border-bottom: 1px solid var(--controller-line-color);
@@ -92,15 +94,15 @@ a {
   transition: all 120ms ease-out;
 }
 
-.carbon-input input::placeholder {
+.carbon-input input::placeholder, .carbon-input textarea::placeholder {
   color: color-mix(in srgb, var(--michu-tech-foreground) 64%, transparent);
 }
 
-.carbon-input input:hover {
+.carbon-input input:hover, .carbon-input textarea:hover {
   background-color: var(--controller-hover-color);
 }
 
-.carbon-input input:focus, .carbon-input input:active {
+.carbon-input input:focus, .carbon-input input:active, .carbon-input textarea:active, .carbon-input textarea:focus {
   background-color: var(--controller-focus-color);
   border-color: var(--michu-tech-accent);
 }
@@ -109,6 +111,15 @@ a {
   font-size: 0.8rem;
   font-weight: 200;
   margin-bottom: 0.1rem;
+}
+
+.carbon-input .count {
+  position: absolute;
+  right: 25px;
+  bottom: 5px;
+
+  font-weight: 300;
+  font-size: 0.9rem;
 }
 
 .carbon-button:disabled{

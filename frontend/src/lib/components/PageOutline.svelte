@@ -27,6 +27,8 @@
         display: flex;
         flex-flow: row wrap;
         gap: 0;
+
+        border-bottom: 1px solid var(--controller-line-color);
     }
 
     @media (max-width: 1200px) {

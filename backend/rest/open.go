@@ -1,13 +1,17 @@
 package rest
 
 import (
+	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/M1chaCH/deployment-controller/mail"
 	"github.com/gin-gonic/gin"
+	"io"
 	"net/http"
 	"regexp"
 )
@@ -18,6 +22,7 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.PUT("/login", putUserPassword)
 	router.POST("/login/onboard", postCompleteOnboarding)
 	router.GET("/pages", getOverviewPages)
+	router.POST("/contact", postContact)
 }
 
 var digitRegex = regexp.MustCompile(`\d`)
@@ -244,4 +249,58 @@ func changePasswordHandler(c *gin.Context, idToken auth.IdentityToken, onboardin
 	}
 
 	return true
+}
+
+type contactDto struct {
+	Mail    string `json:"mail"`
+	Message string `json:"message"`
+}
+
+func postContact(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	var dto contactDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		logs.Info(fmt.Sprintf("failed to bind data from contact request: %v", err))
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
+		return
+	}
+
+	if len(dto.Message) > 1000 {
+		auth.RespondWithCookie(c, http.StatusRequestEntityTooLarge, gin.H{"message": "message too long"})
+		return
+	}
+
+	deviceId, err := clients.LookupDeviceId(idToken.Issuer, idToken.OriginIp, idToken.OriginAgent)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("device of request not found: %v -- clientId:%s ip:%s agent:%s", err, idToken.Issuer, idToken.OriginIp, idToken.OriginAgent))
+		deviceId = "not found: " + err.Error()
+	}
+
+	err = mail.SendMailToAdmin(idToken.Issuer, "michu-tech Contact request", func(writer io.WriteCloser) error {
+		return mail.ParseContactRequestTemplate(writer, mail.ContactRequestMailData{
+			ClientId: idToken.Issuer,
+			DeviceId: deviceId,
+			Sender:   dto.Mail,
+			Message:  dto.Message,
+		})
+	})
+
+	if err != nil {
+		if errors.Is(err, mail.TooManyMailsError) {
+			logs.Warn(fmt.Sprintf("mail threshold was reached by client: %s", idToken.Issuer))
+			auth.RespondWithCookie(c, http.StatusTooManyRequests, gin.H{"message": "too many mails sent, wait some time and try again"})
+			return
+		}
+
+		logs.Warn(fmt.Sprintf("failed to send mail: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to send mail"})
+		return
+	}
+
+	auth.RespondWithCookie(c, http.StatusAccepted, gin.H{"message": "sent mail"})
 }

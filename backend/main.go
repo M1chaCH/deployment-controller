@@ -8,6 +8,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/M1chaCH/deployment-controller/mail"
 	"github.com/M1chaCH/deployment-controller/rest"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
@@ -100,6 +101,7 @@ func pong(c *gin.Context) {
 }
 
 func initCaches() {
+	mail.InitTemplates()
 	clients.InitCache()
 	users.InitCache()
 	pages.InitCache()

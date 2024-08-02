@@ -1,6 +1,7 @@
 package clients
 
 import (
+	"database/sql"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/caches"
@@ -135,6 +136,36 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 	}
 
 	return LoadClientInfo(devices[0].ClientId)
+}
+
+func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
+	if cache.IsInitialized() {
+		client, found := cache.Get(clientId)
+		if found {
+			for _, device := range client.Devices {
+				if device.IpAddress == ip && device.UserAgent == agent {
+					return device.Id, nil
+				}
+			}
+		}
+	}
+
+	logs.Info("device found in client cache, searching in DB")
+	db := framework.DB()
+	var ids []string
+	err := db.Select(&ids, "SELECT client_devices.id FROM client_devices WHERE ip_address=$1 AND user_agent=$2 AND client_id = $3 LIMIT 1", ip, agent, clientId)
+	if err != nil {
+		return "", err
+	}
+
+	if len(ids) > 1 {
+		logs.Warn(fmt.Sprintf("found more than one device for client with same data in DB: clientId:%s ip:%s agent:%s", clientId, ip, agent))
+	}
+	if len(ids) < 1 {
+		return "", sql.ErrNoRows
+	}
+
+	return ids[0], nil
 }
 
 func CreateNewClient(clientId string, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {

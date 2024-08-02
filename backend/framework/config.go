@@ -29,6 +29,18 @@ type AppConfig struct {
 	Cors struct {
 		Origins string `yaml:"origins"`
 	}
+	Mail struct {
+		Sender        string `yaml:"sender"`
+		Receiver      string `yaml:"receiver"`
+		MaxCount      int    `yaml:"max_count"`
+		CountDuration int    `yaml:"count_duration"`
+		SMTP          struct {
+			Host     string `yaml:"host"`
+			Port     int    `yaml:"port"`
+			User     string `yaml:"user"`
+			Password string `yaml:"password"`
+		}
+	}
 }
 
 var cachedConfig AppConfig

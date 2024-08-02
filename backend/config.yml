@@ -14,5 +14,15 @@ jwt:
 root:
   mail: test@mail.com
   password: test
+mail:
+  sender: noreply-deployments@michu-tech.com
+  receiver: admin@michu-tech.com
+  max_count: 5
+  count_duration: 10
+  smtp:
+    host: relay
+    port: 22
+    user: user
+    password: password
 cors:
   origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
