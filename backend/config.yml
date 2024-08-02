@@ -26,3 +26,8 @@ mail:
     password: password
 cors:
   origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
+  host: host
+  account: someuser
+  license: plspassword
+  cache_expire_hours: 48
+  check_wait_time_minutes: 10

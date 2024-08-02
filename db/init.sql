@@ -49,9 +49,35 @@ create table client_devices
     client_id uuid not null,
     ip_address varchar(20) not null,
     user_agent varchar(250) not null,
+    ip_location_check_error varchar(255) null,
+    ip_is_private bool null,
     created_at timestamp not null default current_timestamp,
     foreign key (client_id) references clients(id) on delete cascade,
     constraint device_is_unique_to_client unique (client_id, ip_address, user_agent)
+);
+
+drop table if exists ip_locations cascade;
+create table ip_locations
+(
+    device_id uuid primary key,
+    city_id int,
+    city_name varchar(255),
+    city_plz varchar(127),
+    subdivision_id int,
+    subdivision_code varchar(31),
+    country_id int,
+    country_code varchar(31),
+    continent_id int,
+    continent_code varchar(31),
+    accuracy_radius int,
+    latitude float8,
+    longitude float8,
+    time_zone varchar(31),
+    system_number int,
+    system_organisation varchar(127),
+    network varchar(255),
+    ip_address varchar(31),
+    foreign key (device_id) references client_devices(id) on delete cascade
 );
 
 drop table if exists mfa_token cascade;

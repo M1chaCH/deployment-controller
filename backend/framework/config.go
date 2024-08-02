@@ -41,6 +41,13 @@ type AppConfig struct {
 			Password string `yaml:"password"`
 		}
 	}
+	Location struct {
+		Host                 string `yaml:"host"`
+		Account              string `yaml:"account"`
+		License              string `yaml:"license"`
+		CacheExpireHours     int    `yaml:"cache_expire_hours"`
+		CheckWaitTimeMinutes int    `yaml:"check_wait_time_minutes"`
+	}
 }
 
 var cachedConfig AppConfig
