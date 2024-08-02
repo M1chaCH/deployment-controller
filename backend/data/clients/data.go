@@ -7,6 +7,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/framework/caches"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 	"time"
 )
 
@@ -101,6 +102,39 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 
 	cache.StoreSafeBackground(cacheItem)
 	return cacheItem, true, nil
+}
+
+type UserDevicesDto struct {
+	UserId    string    `json:"userId" db:"user_id"`
+	ClientId  string    `json:"clientId" db:"client_id"`
+	DeviceId  string    `json:"deviceId" db:"device_id"`
+	Ip        string    `json:"ip" db:"ip_address"`
+	Agent     string    `json:"userAgent" db:"user_agent"`
+	CreatedAt time.Time `json:"createdAt" db:"created_at"`
+}
+
+func SelectDevicesByUsers(userIds []string) ([]UserDevicesDto, error) {
+	if len(userIds) == 0 {
+		return []UserDevicesDto{}, nil
+	}
+
+	statement, args, err := sqlx.In(`
+SELECT c.real_user_id as user_id, d.client_id, d.id as device_id, d.user_agent, d.ip_address, d.created_at
+FROM client_devices as d
+    LEFT JOIN public.clients c on c.id = d.client_id
+WHERE c.real_user_id in (?)
+ORDER BY d.created_at DESC
+`, userIds)
+
+	if err != nil {
+		return nil, err
+	}
+
+	db := framework.DB()
+	statement = db.Rebind(statement)
+	var result []UserDevicesDto
+	err = db.Select(&result, statement, args...)
+	return result, err
 }
 
 func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {

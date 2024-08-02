@@ -47,18 +47,4 @@
 
     background-color: var(--controller-area-color);
 }
-
-.labeled-value {
-    display: flex;
-    flex-flow: column;
-    padding: 1rem;
-    box-sizing: border-box;
-
-    border-bottom: 1px solid var(--controller-line-color);
-}
-
-.labeled-value label {
-    font-size: 0.8rem;
-    font-weight: 200;
-}
 </style>

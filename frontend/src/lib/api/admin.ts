@@ -19,6 +19,7 @@ export interface AdminUserDto {
   createdAt: string
   lastLogin: string
   pageAccess: AdminPageAccessDto[]
+  devices: AdminUserDeviceDto[]
 }
 
 export interface AdminPageAccessDto {
@@ -26,6 +27,14 @@ export interface AdminPageAccessDto {
   technicalName: string
   accessAllowed: boolean
   pagePrivate: boolean
+}
+
+export interface AdminUserDeviceDto {
+  userId: string,
+  deviceId: string,
+  clientId: string,
+  ip: string,
+  userAgent: string,
 }
 
 export interface AdminEditUserDto {

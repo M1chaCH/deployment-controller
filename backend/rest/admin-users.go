@@ -3,6 +3,7 @@ package rest
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
@@ -17,14 +18,15 @@ const emailPattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 var emailRegex = regexp.MustCompile(emailPattern)
 
 type AdminUserDto struct {
-	UserId     string          `json:"userId"`
-	Mail       string          `json:"mail"`
-	Admin      bool            `json:"admin"`
-	Blocked    bool            `json:"blocked"`
-	Onboard    bool            `json:"onboard"`
-	CreatedAt  time.Time       `json:"createdAt"`
-	LastLogin  time.Time       `json:"lastLogin"`
-	PageAccess []PageAccessDto `json:"pageAccess"`
+	UserId     string                   `json:"userId"`
+	Mail       string                   `json:"mail"`
+	Admin      bool                     `json:"admin"`
+	Blocked    bool                     `json:"blocked"`
+	Onboard    bool                     `json:"onboard"`
+	CreatedAt  time.Time                `json:"createdAt"`
+	LastLogin  time.Time                `json:"lastLogin"`
+	PageAccess []PageAccessDto          `json:"pageAccess"`
+	Devices    []clients.UserDevicesDto `json:"devices"`
 }
 
 type PageAccessDto struct {
@@ -42,6 +44,17 @@ func getUsers(c *gin.Context) {
 		return
 	}
 
+	userIds := make([]string, len(result))
+	for i, user := range result {
+		userIds[i] = user.Id
+	}
+	userDevices, err := clients.SelectDevicesByUsers(userIds)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to select devices of users: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load users"})
+		return
+	}
+
 	// don't want so send salt and password
 	dtos := make([]AdminUserDto, len(result))
 	for i, user := range result {
@@ -55,6 +68,13 @@ func getUsers(c *gin.Context) {
 			})
 		}
 
+		devices := make([]clients.UserDevicesDto, 0)
+		for _, userDevice := range userDevices {
+			if userDevice.UserId == user.Id {
+				devices = append(devices, userDevice)
+			}
+		}
+
 		dtos[i] = AdminUserDto{
 			UserId:     user.Id,
 			Mail:       user.Mail,
@@ -64,6 +84,7 @@ func getUsers(c *gin.Context) {
 			CreatedAt:  user.CreatedAt,
 			LastLogin:  user.LastLogin,
 			PageAccess: pageAccess,
+			Devices:    devices,
 		}
 	}
 

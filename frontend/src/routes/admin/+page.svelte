@@ -1,5 +1,5 @@
 <script lang="ts">
-    import {type AdminEditUserDto, type AdminPageDto, type AdminUserDto, deletePage, deleteUser, getPages, getUsers, savePage, saveUser} from '$lib/api/admin';
+    import {type AdminEditUserDto, type AdminPageDto, type AdminUserDeviceDto, type AdminUserDto, deletePage, deleteUser, getPages, getUsers, savePage, saveUser} from '$lib/api/admin';
     import {type ApiErrorDto, isErrorDto} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
     import AppCard from '$lib/components/AppCard.svelte';
@@ -83,6 +83,8 @@
             userToEdit.addPages = userToEdit.addPages.filter(p => p !== pageId)
         }
     }
+
+    let viewDevices: AdminUserDeviceDto[] | undefined;
 
     async function handleSavePage() {
         if(!pageToEdit) {
@@ -222,6 +224,11 @@
                                     </span>{page.accessAllowed ? 'Access granted' : 'Access denied'}
                                 </p>
                             {/each}
+                            <div style="height: 1px; width: 75%; background-color: var(--controller-line-color); margin: 1rem 0;"></div>
+                            <button class="carbon-button flat" on:click={() => viewDevices = user.devices}>
+                                View Devices
+                                <span class="material-symbols-outlined">unfold_more
+                            </button>
                         </div>
                         <div slot="footer" class="controls">
                             <button class="carbon-button flat" on:click={() => {
@@ -399,6 +406,44 @@
             userResetPasswordMail = "";
         }}/>
 {/if}
+{#if viewDevices && viewDevices.length > 0}
+    <div class="backdrop">
+        <div class="content-card">
+            <div style="padding: 1rem 2rem;">
+                <h3>Devices</h3>
+                {#each viewDevices as device}
+                    <div style="height: 1px; width: 75%; background-color: var(--controller-line-color); margin: 1rem 0;"></div>
+                    <div class="labeled-value">
+                        <label for={`${device.deviceId}-ip`}>Ip Address</label>
+                        <p id={`${device.deviceId}-ip`}>{device.ip}</p>
+                    </div>
+                    <div class="labeled-value">
+                        <label for={`${device.deviceId}-agent`}>User Agent</label>
+                        <p id={`${device.deviceId}-agent`} style="max-height: 4rem; overflow-y: auto;">{device.userAgent}</p>
+                    </div>
+                    <div class="labeled-value">
+                        <label for={`${device.deviceId}-location`}>Location</label>
+                        <p id={`${device.deviceId}-location`}>...</p>
+                    </div>
+                    <div class="labeled-value">
+                        <label for={`${device.deviceId}-clientId`}>Client ID</label>
+                        <p id={`${device.deviceId}-clientId`}>{device.clientId}</p>
+                    </div>
+                    <div class="labeled-value">
+                        <label for={`${device.deviceId}-deviceId`}>Device ID</label>
+                        <p id={`${device.deviceId}-deviceId`}>{device.deviceId}</p>
+                    </div>
+                {/each}
+            </div>
+            <div class="controls">
+                <button class="carbon-button secondary" on:click={() => viewDevices = undefined}>
+                    <span class="material-symbols-outlined icon">arrow_left_alt</span>
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+{/if}
 
 <style>
     .content {
@@ -413,5 +458,21 @@
         display: flex;
         flex-flow: row wrap;
         gap: 2rem;
+    }
+
+    .content-card {
+        max-height: 80vh;
+        overflow-y: auto;
+    }
+
+    .content-card .controls {
+        position: sticky;
+        bottom: 0;
+    }
+
+    .labeled-value {
+        margin-top: 0.5rem;
+        border-bottom: none;
+        padding: 0;
     }
 </style>

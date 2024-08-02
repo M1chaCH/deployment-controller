@@ -320,6 +320,7 @@ a {
 
   backdrop-filter: blur(2px);
   background-color: color-mix(in srgb, var(--michu-tech-black) 40%, transparent);
+  z-index: 999;
 }
 
 .content-card {
@@ -329,4 +330,18 @@ a {
   min-width: 220px;
   width: 80vw;
   max-width: 480px;
+}
+
+.labeled-value {
+  display: flex;
+  flex-flow: column;
+  padding: 1rem;
+  box-sizing: border-box;
+
+  border-bottom: 1px solid var(--controller-line-color);
+}
+
+.labeled-value label {
+  font-size: 0.8rem;
+  font-weight: 200;
 }
