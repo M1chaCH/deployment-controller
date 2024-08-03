@@ -18,15 +18,15 @@ const emailPattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 var emailRegex = regexp.MustCompile(emailPattern)
 
 type AdminUserDto struct {
-	UserId     string                   `json:"userId"`
-	Mail       string                   `json:"mail"`
-	Admin      bool                     `json:"admin"`
-	Blocked    bool                     `json:"blocked"`
-	Onboard    bool                     `json:"onboard"`
-	CreatedAt  time.Time                `json:"createdAt"`
-	LastLogin  time.Time                `json:"lastLogin"`
-	PageAccess []PageAccessDto          `json:"pageAccess"`
-	Devices    []clients.UserDevicesDto `json:"devices"`
+	UserId     string           `json:"userId"`
+	Mail       string           `json:"mail"`
+	Admin      bool             `json:"admin"`
+	Blocked    bool             `json:"blocked"`
+	Onboard    bool             `json:"onboard"`
+	CreatedAt  time.Time        `json:"createdAt"`
+	LastLogin  time.Time        `json:"lastLogin"`
+	PageAccess []PageAccessDto  `json:"pageAccess"`
+	Devices    []UserDevicesDto `json:"devices"`
 }
 
 type PageAccessDto struct {
@@ -34,6 +34,19 @@ type PageAccessDto struct {
 	TechnicalName string `json:"technicalName"`
 	AccessAllowed bool   `json:"accessAllowed"`
 	PagePrivate   bool   `json:"pagePrivate"`
+}
+
+type UserDevicesDto struct {
+	UserId             string    `json:"userId" db:"user_id"`
+	ClientId           string    `json:"clientId" db:"client_id"`
+	DeviceId           string    `json:"deviceId" db:"device_id"`
+	Ip                 string    `json:"ip" db:"ip_address"`
+	Agent              string    `json:"userAgent" db:"user_agent"`
+	City               string    `json:"city" db:"city"`
+	Subdivision        string    `json:"subdivision" db:"subdivision"`
+	Country            string    `json:"country" db:"country"`
+	SystemOrganisation string    `json:"systemOrganisation" db:"system_organisation"`
+	CreatedAt          time.Time `json:"createdAt" db:"created_at"`
 }
 
 func getUsers(c *gin.Context) {
@@ -68,10 +81,21 @@ func getUsers(c *gin.Context) {
 			})
 		}
 
-		devices := make([]clients.UserDevicesDto, 0)
+		devices := make([]UserDevicesDto, 0)
 		for _, userDevice := range userDevices {
 			if userDevice.UserId == user.Id {
-				devices = append(devices, userDevice)
+				devices = append(devices, UserDevicesDto{
+					UserId:             userDevice.UserId,
+					ClientId:           userDevice.ClientId,
+					DeviceId:           userDevice.DeviceId,
+					Ip:                 userDevice.Ip,
+					Agent:              userDevice.Agent,
+					City:               userDevice.City.String,
+					Subdivision:        userDevice.Subdivision.String,
+					Country:            userDevice.Country.String,
+					SystemOrganisation: userDevice.SystemOrganisation.String,
+					CreatedAt:          time.Time{},
+				})
 			}
 		}
 

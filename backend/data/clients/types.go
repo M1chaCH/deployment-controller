@@ -18,7 +18,6 @@ type ClientDevice struct {
 	UserAgent            string         `db:"user_agent"`
 	IpAddress            string         `db:"ip_address"`
 	IpLocationCheckError sql.NullString `db:"ip_location_check_error"`
-	IpIsPrivate          sql.NullBool   `db:"ip_is_private"`
 }
 
 type ClientCacheItem struct {

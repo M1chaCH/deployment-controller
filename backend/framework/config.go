@@ -47,6 +47,7 @@ type AppConfig struct {
 		License              string `yaml:"license"`
 		CacheExpireHours     int    `yaml:"cache_expire_hours"`
 		CheckWaitTimeMinutes int    `yaml:"check_wait_time_minutes"`
+		LocalIp              string `yaml:"local_ip"`
 	}
 }
 

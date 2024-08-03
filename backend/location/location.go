@@ -53,7 +53,6 @@ func InitCache() {
 }
 
 var privateIpRegexp = regexp.MustCompile(`(^192\.168\..*$)|(^172\.16\..*$)|(^10\..*$)`)
-var PrivateIpError = errors.New("ip invalid, in private / local range")
 
 func LoadLocation(ip string) (CacheItem, error) {
 	if len(ip) < 7 {
@@ -62,7 +61,7 @@ func LoadLocation(ip string) (CacheItem, error) {
 
 	// 172.18.0.1 is a docker ip found during development
 	if privateIpRegexp.MatchString(ip) || strings.ToLower(ip) == "localhost" || ip == "127.0.0.1" || ip == "172.18.0.1" {
-		return CacheItem{}, PrivateIpError
+		ip = framework.Config().Location.LocalIp
 	}
 
 	if cache.IsInitialized() {

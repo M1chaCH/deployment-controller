@@ -50,7 +50,6 @@ create table client_devices
     ip_address varchar(20) not null,
     user_agent varchar(250) not null,
     ip_location_check_error varchar(255) null,
-    ip_is_private bool null,
     created_at timestamp not null default current_timestamp,
     foreign key (client_id) references clients(id) on delete cascade,
     constraint device_is_unique_to_client unique (client_id, ip_address, user_agent)

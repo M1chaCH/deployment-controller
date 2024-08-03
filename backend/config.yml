@@ -32,3 +32,4 @@ location:
   license: plspassword
   cache_expire_hours: 48
   check_wait_time_minutes: 10
+  local_ip: 1.1.1.1

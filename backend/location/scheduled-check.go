@@ -1,7 +1,6 @@
 package location
 
 import (
-	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/framework"
@@ -32,14 +31,9 @@ func checkDevicesWithNoLocation() error {
 	for _, device := range devicesToCheck {
 		location, err := LoadLocation(device.IpAddress)
 
-		if errors.Is(err, PrivateIpError) {
-			err = clients.UpdateDeviceAfterLocationCheck(device.DeviceId, true, "")
-			if err != nil {
-				return err
-			}
-		} else if err != nil {
+		if err != nil {
 			logs.Warn(fmt.Sprintf("error loading location for ip (%s): %v", device.IpAddress, err))
-			err = clients.UpdateDeviceAfterLocationCheck(device.DeviceId, false, err.Error())
+			err = clients.UpdateDeviceAfterLocationCheck(device.DeviceId, err.Error())
 			if err != nil {
 				return err
 			}

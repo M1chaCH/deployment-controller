@@ -104,22 +104,22 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 	return cacheItem, true, nil
 }
 
-type UserDevicesDto struct {
-	UserId             string    `json:"userId" db:"user_id"`
-	ClientId           string    `json:"clientId" db:"client_id"`
-	DeviceId           string    `json:"deviceId" db:"device_id"`
-	Ip                 string    `json:"ip" db:"ip_address"`
-	Agent              string    `json:"userAgent" db:"user_agent"`
-	City               string    `json:"city" db:"city"`
-	Subdivision        string    `json:"subdivision" db:"subdivision"`
-	Country            string    `json:"country" db:"country"`
-	SystemOrganisation string    `json:"systemOrganisation" db:"system_organisation"`
-	CreatedAt          time.Time `json:"createdAt" db:"created_at"`
+type UserDevicesEntity struct {
+	UserId             string         `json:"userId" db:"user_id"`
+	ClientId           string         `json:"clientId" db:"client_id"`
+	DeviceId           string         `json:"deviceId" db:"device_id"`
+	Ip                 string         `json:"ip" db:"ip_address"`
+	Agent              string         `json:"userAgent" db:"user_agent"`
+	City               sql.NullString `json:"city" db:"city"`
+	Subdivision        sql.NullString `json:"subdivision" db:"subdivision"`
+	Country            sql.NullString `json:"country" db:"country"`
+	SystemOrganisation sql.NullString `json:"systemOrganisation" db:"system_organisation"`
+	CreatedAt          time.Time      `json:"createdAt" db:"created_at"`
 }
 
-func SelectDevicesByUsers(userIds []string) ([]UserDevicesDto, error) {
+func SelectDevicesByUsers(userIds []string) ([]UserDevicesEntity, error) {
 	if len(userIds) == 0 {
-		return []UserDevicesDto{}, nil
+		return []UserDevicesEntity{}, nil
 	}
 
 	statement, args, err := sqlx.In(`
@@ -138,7 +138,7 @@ ORDER BY d.created_at DESC
 
 	db := framework.DB()
 	statement = db.Rebind(statement)
-	var result []UserDevicesDto
+	var result []UserDevicesEntity
 	err = db.Select(&result, statement, args...)
 	return result, err
 }
@@ -158,17 +158,16 @@ FROM client_devices as d
          LEFT JOIN public.ip_locations il on d.id = il.device_id
 WHERE CASE WHEN il.device_id IS NULL THEN TRUE ELSE FALSE END
   AND (d.ip_location_check_error IS NULL OR d.ip_location_check_error = '')
-  AND d.ip_is_private IS NOT TRUE
 `)
 
 	return devices, err
 }
 
-func UpdateDeviceAfterLocationCheck(deviceId string, isPrivate bool, otherError string) error {
+func UpdateDeviceAfterLocationCheck(deviceId string, otherError string) error {
 	db := framework.DB()
 	_, err := db.Exec(`
-UPDATE client_devices SET ip_location_check_error = $1, ip_is_private = $2 WHERE id = $3
-`, otherError, isPrivate, deviceId)
+UPDATE client_devices SET ip_location_check_error = $1 WHERE id = $2
+`, otherError, deviceId)
 	return err
 }
 
