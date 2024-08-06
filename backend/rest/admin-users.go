@@ -203,6 +203,27 @@ func putUser(c *gin.Context) {
 		return
 	}
 
+	if !currentUser.Onboard && dto.Onboard {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "can't 'admin onboard' user"})
+		return
+	}
+
+	if currentUser.Onboard && !dto.Onboard {
+		err := auth.RemoveTokenForUser(framework.GetTx(c), dto.UserId)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))
+			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to remove token for user"})
+			return
+		}
+
+		_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to prepare token for user: %v -> %v", dto.UserId, err))
+			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to prepare token for user"})
+			return
+		}
+	}
+
 	_, err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.RemovePages, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not update user: %v -> %v", dto.Mail, err))

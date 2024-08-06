@@ -339,10 +339,12 @@
                     <input id="userAdmin" type="checkbox" bind:checked={userToEdit.admin}>
                     <label for="userAdmin">Admin</label>
                 </div>
-                <div class="carbon-checkbox">
-                    <input id="userOnboard" type="checkbox" bind:checked={userToEdit.onboard}>
-                    <label for="userOnboard">Onboard</label>
-                </div>
+                {#if userToEdit.onboard}
+                    <div class="carbon-checkbox">
+                        <input id="userOnboard" type="checkbox" bind:checked={userToEdit.onboard}>
+                        <label for="userOnboard">Onboard</label>
+                    </div>
+                {/if}
                 <div class="carbon-checkbox">
                     <input id="userBlocked" type="checkbox" bind:checked={userToEdit.blocked}>
                     <label for="userBlocked">Blocked</label>

@@ -12,10 +12,6 @@ import (
 
 /*
 TODO
-- change admin page onboard edit
-	- remove checkbox
-	- add button "reset onboard"
-		- remove totp registration
 - integrate TOTP into login process
 	- probably need to add "verified" flag to devices
 - implement functionality "receive TOTP via mail"
@@ -84,6 +80,17 @@ func ValidateToken(loadableTx framework.LoadableTx, userId string, code string, 
 
 	valid := totp.Validate(code, entity.Secret)
 	return valid, nil
+}
+
+func RemoveTokenForUser(loadableTx framework.LoadableTx, userId string) error {
+	tx, err := loadableTx()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM user_totp WHERE user_id = $1", userId)
+
+	return err
 }
 
 type MfaTokenEntity struct {
