@@ -1,0 +1,347 @@
+@import "michu-tech.colors.css";
+
+* {
+  font-family: "IBM Plex Sans", "Arial", sans-serif;
+  color: var(--michu-tech-foreground);
+}
+
+::selection {
+  color: var(--michu-tech-background);
+  background: var(--michu-tech-foreground);
+}
+
+html {
+  background-color: var(--michu-tech-background);
+  min-height: 100svh;
+}
+
+body {
+  padding: 0;
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(2.4rem, 12vw, 4rem);
+  font-weight: 100;
+  margin: 0;
+  padding: 0;
+}
+
+h2 {
+  font-size: clamp(2.1rem, 8vw, 3rem);
+  font-weight: 200;
+  margin: 0;
+  padding: 0;
+}
+
+h3 {
+  font-size: 2rem;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
+}
+
+h4 {
+  font-size: 1.5rem;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
+}
+
+p {
+  font-size: 1rem;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
+}
+
+a {
+  font-size: 1rem;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
+  text-decoration: none;
+}
+
+.subtext {
+  font-weight: 600;
+  font-size: 0.7rem;
+}
+
+.carbon-input {
+  width: 100%;
+  min-height: 80px;
+
+  display: flex;
+  flex-flow: column;
+  gap: 0;
+
+  position: relative;
+}
+
+.carbon-input input, .carbon-input textarea {
+  outline: none;
+  border: none;
+  border-bottom: 1px solid var(--controller-line-color);
+
+  background-color: var(--controller-area-color);
+
+  font-size: 1rem;
+  box-sizing: border-box;
+  padding: 1rem;
+  width: 100%;
+
+  transition: all 120ms ease-out;
+}
+
+.carbon-input input::placeholder, .carbon-input textarea::placeholder {
+  color: color-mix(in srgb, var(--michu-tech-foreground) 64%, transparent);
+}
+
+.carbon-input input:hover, .carbon-input textarea:hover {
+  background-color: var(--controller-hover-color);
+}
+
+.carbon-input input:focus, .carbon-input input:active, .carbon-input textarea:active, .carbon-input textarea:focus {
+  background-color: var(--controller-focus-color);
+  border-color: var(--michu-tech-accent);
+}
+
+.carbon-input label {
+  font-size: 0.8rem;
+  font-weight: 200;
+  margin-bottom: 0.1rem;
+}
+
+.carbon-input .count {
+  position: absolute;
+  right: 25px;
+  bottom: 5px;
+
+  font-weight: 300;
+  font-size: 0.9rem;
+}
+
+.carbon-button:disabled{
+  opacity: 0.5;
+  cursor: default;
+}
+
+.carbon-checkbox {
+  width: 100%;
+
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  cursor: pointer;
+}
+
+.carbon-checkbox input {
+  accent-color: var(--michu-tech-foreground);
+  width: 1rem;
+  height: 1rem;
+  cursor: pointer;
+}
+
+.carbon-checkbox input:checked {
+  background-color: var(--michu-tech-accent);
+}
+
+.carbon-checkbox label {
+  font-size: 1rem;
+  font-weight: 200;
+  padding-left: 0.6rem;
+  cursor: pointer;
+}
+
+.carbon-checkbox:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.icon-button {
+  all: unset;
+
+  container: icon-button / size;
+  height: 100%;
+  width: auto;
+  aspect-ratio: 1/1;
+  box-sizing: border-box;
+  padding: 0.4rem;
+
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+
+  transition: all 120ms ease-out;
+}
+
+.icon-button:hover {
+  background-color: var(--controller-hover-color);
+}
+
+.icon-button:active, .icon-button:focus {
+  background-color: var(--controller-focus-color);
+}
+
+.icon-button span {
+  font-size: 72cqh;
+  color: var(--michu-tech-foreground);
+}
+
+.controls {
+  width: 100%;
+  display: flex;
+  flex-flow: row wrap;
+}
+
+.controls .carbon-button {
+  flex: 1 1 50%;
+}
+
+.carbon-button {
+  all:unset;
+  transition: all 120ms ease-out;
+  cursor: pointer;
+
+  width: auto;
+  min-width: 180px;
+  min-height: 52px;
+  height: 100%;
+  max-height: 80px;
+  display: flex;
+  flex-flow: row nowrap;
+  justify-content: space-between;
+  align-items: flex-start;
+
+  font-weight: 300;
+  font-size: 1rem;
+  padding: 1rem;
+  box-sizing: border-box;
+
+  color: var(--michu-tech-foreground);
+}
+
+.carbon-button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.carbon-button .icon {
+  font-size: 1.8rem;
+}
+
+.carbon-button.primary {
+  background-color: var(--michu-tech-accent);
+  color: var(--michu-tech-white);
+}
+
+.carbon-button.primary .icon {
+  color: var(--michu-tech-white);
+}
+
+.carbon-button:hover.primary {
+  background-color: color-mix(in srgb, var(--michu-tech-accent) 88%, var(--michu-tech-foreground));
+}
+
+.carbon-button:focus.primary, .carbon-button:focus.primary {
+  background-color: color-mix(in srgb, var(--michu-tech-accent) 80%, var(--michu-tech-foreground));
+}
+
+.carbon-button.secondary {
+  background-color: var(--michu-tech-primary);
+  color: var(--michu-tech-white);
+}
+
+.carbon-button.secondary .icon {
+  color: var(--michu-tech-white);
+}
+
+.carbon-button:hover.secondary {
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 88%, var(--michu-tech-foreground));
+}
+
+.carbon-button:focus.secondary, .carbon-button:focus.secondary {
+  background-color: color-mix(in srgb, var(--michu-tech-primary) 80%, var(--michu-tech-foreground));
+}
+
+.carbon-button.warn {
+  background-color: var(--michu-tech-warn);
+  color: var(--michu-tech-white);
+}
+
+.carbon-button.warn .icon {
+  color: var(--michu-tech-white);
+}
+
+.carbon-button:hover.warn {
+  background-color: color-mix(in srgb, var(--michu-tech-warn) 88%, var(--michu-tech-foreground));
+}
+
+.carbon-button:focus.warn, .carbon-button:focus.warn {
+  background-color: color-mix(in srgb, var(--michu-tech-warn) 80%, var(--michu-tech-foreground));
+}
+
+.carbon-button.flat {
+  background-color: transparent;
+  color: var(--michu-tech-accent);
+}
+
+.carbon-button.flat .icon {
+  color: var(--michu-tech-accent);
+}
+
+.carbon-button:hover.flat {
+  color: color-mix(in srgb, var(--michu-tech-accent) 88%, var(--michu-tech-foreground));
+}
+
+.carbon-button:focus.flat, .carbon-button:focus.flat {
+  color: color-mix(in srgb, var(--michu-tech-accent) 80%, var(--michu-tech-foreground));
+}
+
+.wrapper-button {
+  all: unset;
+  cursor: pointer;
+  display: block;
+  height: 100%;
+}
+
+.backdrop {
+  position: fixed;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  left: 0;
+
+  display: flex;
+  align-items: center;
+  justify-content: center;
+
+  backdrop-filter: blur(2px);
+  background-color: color-mix(in srgb, var(--michu-tech-black) 40%, transparent);
+  z-index: 999;
+}
+
+.content-card {
+  border-left: 1px solid var(--controller-line-color);
+  background-color: var(--controller-area-color);
+
+  min-width: 220px;
+  width: 80vw;
+  max-width: 480px;
+}
+
+.labeled-value {
+  display: flex;
+  flex-flow: column;
+  padding: 1rem;
+  box-sizing: border-box;
+
+  border-bottom: 1px solid var(--controller-line-color);
+}
+
+.labeled-value label {
+  font-size: 0.8rem;
+  font-weight: 200;
+}
