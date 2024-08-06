@@ -79,11 +79,15 @@ create table ip_locations
     foreign key (device_id) references client_devices(id) on delete cascade
 );
 
-drop table if exists mfa_token cascade;
-create table mfa_token
+drop table if exists user_totp cascade;
+create table user_totp
 (
-    token varchar(8) not null primary key,
-    device_id uuid not null,
-    expires_at timestamp not null,
-    foreign key (device_id) references client_devices(id) on delete cascade
+    user_id      uuid primary key,
+	secret      varchar(255) not null unique,
+	account_name varchar(255) not null unique,
+	image bytea not null,
+    validated   boolean not null default false,
+    created_at timestamptz not null default current_timestamp,
+    validated_at timestamptz null,
+    foreign key (user_id) references users(id) on delete cascade
 );

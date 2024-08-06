@@ -10,10 +10,12 @@ import (
 	"time"
 )
 
+type LoadableTx func() (*sqlx.Tx, error)
+
 // GetTx lazy loads the transaction for the request.
 // the transaction is only started on the first execution of the inner function
 // the transaction will automatically be committed / rollback if it was started
-func GetTx(c *gin.Context) func() (*sqlx.Tx, error) {
+func GetTx(c *gin.Context) LoadableTx {
 	return func() (*sqlx.Tx, error) {
 		tx := getTxFromContext(c)
 		if tx != nil {

@@ -1,15 +1,18 @@
 <script lang="ts">
 
+    import {PUBLIC_BACKEND_URL} from '$env/static/public';
     import {isErrorDto, putChangePassword} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
     import MiniNotification from '$lib/components/MiniNotification.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
+    import TokenInput from '$lib/components/TokenInput.svelte';
     import {onMount} from 'svelte';
 
     let mail: string = "";
     let oldPassword: string;
     let password: string;
-    $: invalid = !mail || !oldPassword || !password || oldPassword === password;
+    let token = "";
+    $: invalid = !mail || !oldPassword || !password || oldPassword === password || !token || token.length < 6;
     let onboardingFailed = false;
 
     onMount(() => {
@@ -25,6 +28,7 @@
                                                        userId: $userStore!.userId,
                                                        newPassword: password,
                                                        oldPassword,
+                                                       token,
                                                    }, true)
 
             if(isErrorDto(result)) {
@@ -39,23 +43,32 @@
 
 <PageOutline pageName="Onboarding">
     <div slot="description">
-        <p>Please change your password to activate your account.</p>
+        <p>Please change your password and setup your two factor login to activate your account.</p>
         <p class="subtext">Your password must be at least 8 characters long and must match the following validations. [ >= 8 Letters, min. 1 number, min. 1 a-z, min. 1 A-Z ]</p>
     </div>
     <div slot="content" class="page" id="onboarding">
         <div class="content-card">
-            <form>
-                <div class="carbon-input">
-                    <label for="mail">E-Mail</label>
-                    <input id="mail" type="email" bind:value={mail}/>
+            <form class="onboarding-form">
+                <div class="onboarding-form-side">
+                    <h4>Change password</h4>
+                    <div class="carbon-input">
+                        <label for="mail">E-Mail</label>
+                        <input id="mail" type="email" bind:value={mail}/>
+                    </div>
+                    <div class="carbon-input">
+                        <label for="oldPassword">Old Password</label>
+                        <input id="oldPassword" type="password" bind:value={oldPassword} autocomplete="current-password"/>
+                    </div>
+                    <div class="carbon-input">
+                        <label for="password">Password</label>
+                        <input id="password" type="password" bind:value={password} autocomplete="new-password"/>
+                    </div>
                 </div>
-                <div class="carbon-input">
-                    <label for="oldPassword">Old Password</label>
-                    <input id="oldPassword" type="password" bind:value={oldPassword} autocomplete="current-password"/>
-                </div>
-                <div class="carbon-input">
-                    <label for="password">Password</label>
-                    <input id="password" type="password" bind:value={password} autocomplete="new-password"/>
+                <div class="onboarding-form-side">
+                    <h4>Create Token</h4>
+                    <img src={PUBLIC_BACKEND_URL + "/open/login/onboard/img"} alt="onboarding token"/>
+                    <p>Please scan this QR-Code with a two factor authenticator app. Every time you login with a new device you will have to use this code to login.</p>
+                    <TokenInput on:input={(e) => token = e.detail.value}/>
                 </div>
             </form>
             {#if onboardingFailed}
@@ -85,7 +98,36 @@
         justify-content: center;
     }
 
-    .content-card form {
+    .content-card {
+        max-width: unset;
+        container: onboarding / inline-size;
+    }
+
+    .onboarding-form {
+        display: grid;
+        grid-template-columns: repeat(2, calc(50% - 0.5rem));
+        gap: 1rem;
+
         padding: 1rem 2rem;
+        box-sizing: border-box;
+    }
+
+    .onboarding-form-side {
+        min-width: 220px;
+        width: 100%;
+    }
+
+    .onboarding-form-side img {
+        width: 100%;
+        height: 200px;
+        object-fit: contain;
+        background-color: white;
+        border-left: 2px solid var(--michu-tech-accent);
+    }
+
+    @container onboarding (max-width: 600px) {
+        .onboarding-form {
+            grid-template-columns: 100% !important;
+        }
     }
 </style>

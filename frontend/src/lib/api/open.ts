@@ -31,6 +31,7 @@ export interface ChangePasswordDto {
   userId: string;
   oldPassword?: string;
   newPassword: string;
+  token?: string;
 }
 
 export function isErrorDto(obj: object | null | undefined): obj is ApiErrorDto {

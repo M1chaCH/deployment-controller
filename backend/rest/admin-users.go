@@ -158,6 +158,13 @@ func postUser(c *gin.Context) {
 		return
 	}
 
+	_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("could not prepare token for new user: %v -> %v", dto.Mail, err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
+		return
+	}
+
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "user created"})
 }
 

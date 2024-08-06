@@ -370,7 +370,7 @@
                     Cancel
                 </button>
                 <button class="carbon-button warn" on:click={handleSaveUser}>
-                    {pageCreate ? 'Create' : 'Update'}
+                    {userCreate ? 'Create' : 'Update'}
                     <span class="material-symbols-outlined icon">arrow_right_alt</span>
                 </button>
             </div>
