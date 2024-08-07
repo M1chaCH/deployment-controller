@@ -31,5 +31,25 @@ INSERT INTO ip_locations (device_id, city_id, city_name, city_plz, subdivision_i
 VALUES (:device_id, :city_id, :city_name, :city_plz, :subdivision_id, :subdivision_code, :country_id, :country_code, :continent_id, :continent_code, :accuracy_radius, :latitude, :longitude, :time_zone, :system_number, :system_organisation, :network, :ip_address)
 `, entity)
 
+	cache.StoreSafeBackground(CacheItem{
+		CityId:             entity.CityId,
+		CityName:           entity.CityName,
+		CityPlz:            entity.CityPlz,
+		SubdivisionId:      entity.SubdivisionId,
+		SubdivisionCode:    entity.SubdivisionCode,
+		CountryId:          entity.CountryId,
+		CountryCode:        entity.CountryCode,
+		ContinentId:        entity.ContinentId,
+		ContinentCode:      entity.ContinentCode,
+		AccuracyRadius:     entity.AccuracyRadius,
+		Latitude:           entity.Latitude,
+		Longitude:          entity.Longitude,
+		TimeZone:           entity.TimeZone,
+		SystemNumber:       entity.SystemNumber,
+		SystemOrganisation: entity.SystemOrganisation,
+		Network:            entity.Network,
+		IpAddress:          entity.IpAddress,
+	})
+
 	return err
 }

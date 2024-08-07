@@ -4,6 +4,7 @@
     import {userStore} from '$lib/api/store';
     import MiniNotification from '$lib/components/MiniNotification.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
+    import TokenInput from '$lib/components/TokenInput.svelte';
     import {onMount} from 'svelte';
 
     onMount(() => {
@@ -20,6 +21,8 @@
                     location.href = "/onboarding"
                     return
                 }
+
+                mfa = user.loginState === "two-factor-waiting";
             }
         })
     })
@@ -34,15 +37,14 @@
 
     async function login() {
         failed = false;
-        mfa = false;
-
         if(!formValid) {
             failed = true;
+            return
         }
 
         let state: LoginState;
         try {
-             state = await postLogin(mail, password);
+             state = await postLogin(mail, password, token);
         } catch (e) {
             console.error(e);
             state = "logged-out"
@@ -93,11 +95,8 @@
                     <input id="password" type="password" bind:value={password}/>
                 </div>
                 {#if mfa}
-                    <div class="carbon-input" id="tokenInput">
-                        <label for="token">Token</label>
-                        <input id="token" type="text" bind:value={token}/>
-                        <p class="subtext">New Device, TwoFactor authentication required.</p>
-                    </div>
+                    <TokenInput on:input={e => token = e.detail.value}/>
+                    <p class="subtext">New Device, TwoFactor authentication required.</p>
                 {/if}
             </form>
             {#if failed}
@@ -128,24 +127,5 @@
 
     .login-inputs {
         padding: 1rem 2rem;
-    }
-
-    #tokenInput {
-        animation: token-fly-in;
-        animation-duration: 250ms;
-        animation-timing-function: ease-out;
-    }
-
-    @keyframes token-fly-in {
-        0% {
-            opacity: 0;
-            transform: translateY(-40%);
-        }
-        60% {
-            opacity: 1;
-        }
-        100% {
-            transform: translatey(0);
-        }
     }
 </style>

@@ -33,6 +33,7 @@ var largeLetterRegex = regexp.MustCompile(`[A-Z]`)
 type loginDto struct {
 	Mail     string `json:"mail" binding:"required"`
 	Password string `json:"password" binding:"required"`
+	Token    string `json:"token"`
 }
 
 func postLogin(c *gin.Context) {
@@ -48,18 +49,13 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	if idToken.LoginState == auth.LoginStateTwofactorWaiting {
-		auth.RespondWithCookie(c, http.StatusNotImplemented, gin.H{"message": "feature not yet implemented..."})
-		return
-	}
-
 	var dto loginDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
 
-	if dto.Mail == "" || dto.Password == "" {
+	if dto.Mail == "" || dto.Password == "" || (idToken.LoginState == auth.LoginStateTwofactorWaiting && len(dto.Token) < 6) {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
@@ -82,7 +78,7 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	state := auth.HandleLoginWithValidCredentials(c, user)
+	state := auth.HandleLoginWithValidCredentials(c, user, dto.Token)
 	if state != auth.LoginStateLoggedOut {
 		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": state})
 	}
@@ -205,12 +201,55 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	ok = changePasswordHandler(c, dto, idToken, true)
-	if ok {
-		idToken.LoginState = auth.LoginStateLoggedIn
-		auth.SetCurrentIdentityToken(c, idToken)
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
+	client, found, err := clients.LoadClientInfo(idToken.Issuer)
+	if err != nil || !found {
+		logs.Warn(fmt.Sprintf("failed to load client info: %v / found: %v", err, found))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
 	}
+
+	device, found := clients.GetCurrentDevice(client, idToken.OriginIp, idToken.OriginAgent)
+	err = clients.MarkDeviceAsValidated(framework.GetTx(c), idToken.Issuer, device.Id)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to mark device as validated while onboarding: client: %s - device: %s", client.Id, device.Id))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+
+	ok = changePasswordHandler(c, dto, idToken, true)
+	if !ok {
+		return
+	}
+
+	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	if !found {
+		logs.Warn(fmt.Sprintf("failed to load user with id, not found: %s", idToken.UserId))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+	pagesString := ""
+	for i, page := range user.Pages {
+		if !page.GetAccessAllowed() {
+			continue
+		}
+
+		pagesString += page.Url
+
+		if i != len(user.Pages)-1 {
+			pagesString += ", "
+		}
+	}
+
+	err = mail.SendMailToAdmin(mail.TechnicalNoThrottle, "michu-tech Onboarding Complete", func(writer io.WriteCloser) error {
+		return mail.ParseOnboardingCompleteTemplate(writer, mail.OnboardingCompleteMailData{
+			UserMail:       user.Mail,
+			UserPageAccess: pagesString,
+		})
+	})
+
+	idToken.LoginState = auth.LoginStateLoggedIn
+	auth.SetCurrentIdentityToken(c, idToken)
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
 }
 
 type overviewPagesDto struct {

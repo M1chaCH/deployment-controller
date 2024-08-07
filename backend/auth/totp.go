@@ -10,14 +10,6 @@ import (
 	"time"
 )
 
-/*
-TODO
-- integrate TOTP into login process
-	- probably need to add "verified" flag to devices
-- implement functionality "receive TOTP via mail"
-- notify admin via mail when someone completed onboarding
-*/
-
 func PrepareToken(loadableTx framework.LoadableTx, userId string, userEmail string) (MfaTokenEntity, error) {
 	config := framework.Config()
 

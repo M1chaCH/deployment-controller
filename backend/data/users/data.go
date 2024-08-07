@@ -41,7 +41,7 @@ func RefreshCash(txFunc framework.LoadableTx) error {
 
 	err = cache.Initialize(initial)
 	if err != nil {
-		logs.Severe(fmt.Sprintf("could not initialize userEntity cache: %v", err))
+		logs.Severe(fmt.Sprintf("could not initialize UserEntity cache: %v", err))
 		return err
 	}
 
@@ -83,10 +83,10 @@ func LoadUserByMail(txFunc framework.LoadableTx, mail string) (UserCacheItem, bo
 		return UserCacheItem{}, false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where mail = $1", mail)
 	if err != nil {
-		logs.Info("failed to select userEntity by mail: " + err.Error())
+		logs.Info("failed to select UserEntity by mail: " + err.Error())
 		return UserCacheItem{}, false
 	}
 	if len(result) == 0 {
@@ -117,17 +117,17 @@ func LoadUserById(txFunc framework.LoadableTx, id string) (UserCacheItem, bool) 
 		}
 	}
 
-	logs.Info(fmt.Sprintf("user not found in cache, selecting userEntity by id: %s", id))
+	logs.Info(fmt.Sprintf("user not found in cache, selecting UserEntity by id: %s", id))
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to check db: %v", err))
 		return UserCacheItem{}, false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where id = $1", id)
 	if err != nil {
-		logs.Info("failed to select userEntity by id: " + err.Error())
+		logs.Info("failed to select UserEntity by id: " + err.Error())
 		return UserCacheItem{}, false
 	}
 	if len(result) == 0 {
@@ -192,14 +192,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	}
 
 	cache.StoreSafeBackground(result)
-	logs.Info(fmt.Sprintf("inserted new userEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds)))
+	logs.Info(fmt.Sprintf("inserted new UserEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds)))
 	return result, nil
 }
 
 func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, pageIdsToRemove []string, pageIdsToAdd []string) (UserCacheItem, error) {
 	existingUser, ok := cache.Get(id)
 	if !ok {
-		return UserCacheItem{}, errors.New("userEntity not found")
+		return UserCacheItem{}, errors.New("UserEntity not found")
 	}
 
 	tx, err := txFunc()
@@ -285,7 +285,7 @@ func SimilarUserExists(txFunc framework.LoadableTx, id string, mail string) bool
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where id = $1 or mail = $2", id, mail)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -303,7 +303,7 @@ func MailExists(txFunc framework.LoadableTx, mail string, excludedUserId string)
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where mail = $1 and id != $2", mail, excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -321,7 +321,7 @@ func DifferentAdminExists(txFunc framework.LoadableTx, excludedUserId string) bo
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where admin = true and id != $1", excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -340,7 +340,7 @@ func selectAllUsers(txFunc framework.LoadableTx) ([]UserCacheItem, error) {
 
 	result := make([]UserCacheItem, 0)
 
-	users := make([]userEntity, 0)
+	users := make([]UserEntity, 0)
 	err = tx.Select(&users, "SELECT * FROM users")
 	if err != nil {
 		return result, err

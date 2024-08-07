@@ -171,6 +171,34 @@ UPDATE client_devices SET ip_location_check_error = $1 WHERE id = $2
 	return err
 }
 
+func TryFindClientOfUser(userId string) (ClientCacheItem, bool, error) {
+	if cache.IsInitialized() {
+		allCached, err := cache.GetAllAsArray()
+		if err != nil {
+			return ClientCacheItem{}, false, err
+		}
+		for _, item := range allCached {
+			if item.RealUserId == userId {
+				return item, true, nil
+			}
+		}
+	}
+
+	logs.Info(fmt.Sprintf("failed to find client of user in cache checkin db, user: %s", userId))
+	db := framework.DB()
+	var clients []knownClientEntity
+	err := db.Select(&clients, "SELECT * FROM clients WHERE real_user_id = $1", userId)
+	if err != nil {
+		return ClientCacheItem{}, false, err
+	}
+
+	if len(clients) == 0 {
+		return ClientCacheItem{}, false, nil
+	}
+
+	return LoadClientInfo(clients[0].Id)
+}
+
 func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		resultChannel := make(chan ClientCacheItem)
@@ -204,6 +232,16 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 	}
 
 	return LoadClientInfo(devices[0].ClientId)
+}
+
+func GetCurrentDevice(client ClientCacheItem, ip string, agent string) (ClientDevice, bool) {
+	for _, device := range client.Devices {
+		if device.IpAddress == ip && device.UserAgent == agent {
+			return device, true
+		}
+	}
+
+	return ClientDevice{}, false
 }
 
 func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
@@ -267,6 +305,7 @@ func CreateNewClient(clientId string, realUserId string, ip string, userAgent st
 			ClientId:  clientId,
 			IpAddress: ip,
 			UserAgent: userAgent,
+			Validated: false,
 		}},
 	}
 	cache.StoreSafeBackground(cacheItem)
@@ -316,6 +355,94 @@ func AddUserToClient(clientId string, userId string) (ClientCacheItem, error) {
 	return client, err
 }
 
+func MarkDeviceAsValidated(txLoader framework.LoadableTx, clientId string, deviceId string) error {
+	tx, err := txLoader()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("UPDATE client_devices SET validated = true WHERE id = $1", deviceId)
+	if err != nil {
+		return err
+	}
+
+	// update cache, needs to be like this, because LoadClientInfo ignores the current transaction
+	client, found, err := LoadClientInfo(clientId)
+	if !found && err == nil {
+		logs.Warn("updated device but client was not found, client: " + clientId)
+	}
+	if err != nil {
+		return err
+	}
+	for i, device := range client.Devices {
+		if device.Id == deviceId {
+			client.Devices[i].Validated = true
+			break
+		}
+	}
+	cache.StoreSafeBackground(client)
+
+	return err
+}
+
+func MergeDevicesAndDelete(txLoader framework.LoadableTx, target ClientCacheItem, toMerge ClientCacheItem) (ClientCacheItem, error) {
+	devicesToSearch := target.Devices
+	var devicesToAdd []ClientDevice
+	for _, device := range toMerge.Devices {
+		foundIndex := -1
+		for j, searchDevice := range devicesToSearch {
+			if device.IpAddress == searchDevice.IpAddress && device.UserAgent == searchDevice.UserAgent {
+				foundIndex = j
+				break
+			}
+		}
+
+		if foundIndex == -1 {
+			devicesToAdd = append(devicesToAdd, device)
+		} else {
+			devicesToSearch = append(devicesToSearch[:foundIndex], devicesToSearch[foundIndex+1:]...)
+		}
+	}
+
+	tx, err := txLoader()
+	if err != nil {
+		return ClientCacheItem{}, err
+	}
+
+	if len(devicesToAdd) > 0 {
+		_, err = tx.NamedExec(`
+INSERT INTO client_devices (id, client_id, ip_address, user_agent, ip_location_check_error, created_at, validated) 
+VALUES (:id, :client_id, :ip_address, :user_agent, :ip_location_check_error, :created_at, :validated)
+`, devicesToAdd)
+
+		if err != nil {
+			return ClientCacheItem{}, err
+		}
+	}
+
+	_, err = tx.Exec("DELETE FROM clients WHERE id = $1", toMerge.Id)
+	if err != nil {
+		return ClientCacheItem{}, err
+	}
+
+	err = cache.Remove(toMerge.Id)
+	if err != nil {
+		return ClientCacheItem{}, err
+	}
+
+	err = cache.Remove(target.Id)
+	if err != nil {
+		return ClientCacheItem{}, err
+	}
+
+	logs.Info(fmt.Sprintf("merged devices of client %s into client %s (%d devices)", target.Id, toMerge.Id, len(target.Devices)))
+	client, found, err := LoadClientInfo(target.Id)
+	if !found && err == nil {
+		logs.Warn(fmt.Sprintf("just manipulated client devices, but client was not found: id:%s", target.Id))
+	}
+	return client, err
+}
+
 func selectAllClients() ([]ClientCacheItem, error) {
 	db := framework.DB()
 	var result []ClientCacheItem
@@ -361,6 +488,5 @@ func selectAllClients() ([]ClientCacheItem, error) {
 			Devices:    clientDevices,
 		})
 	}
-
 	return result, err
 }

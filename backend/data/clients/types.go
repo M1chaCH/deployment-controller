@@ -18,6 +18,7 @@ type ClientDevice struct {
 	UserAgent            string         `db:"user_agent"`
 	IpAddress            string         `db:"ip_address"`
 	IpLocationCheckError sql.NullString `db:"ip_location_check_error"`
+	Validated            bool           `db:"validated"`
 }
 
 type ClientCacheItem struct {
