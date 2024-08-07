@@ -8,6 +8,17 @@ import (
 	"os"
 )
 
+// InitTemplates reads all template files in
+// IMPORTANT: Template files must end with an empty line
+func InitTemplates() {
+	var err error
+	contactRequestTemplate, err = template.New(contactRequestTemplateName).Parse(mustReadTemplateFile(contactRequestFile))
+	onboardingCompleteTemplate, err = template.New(onboardingCompleteTemplateName).Parse(mustReadTemplateFile(onboardingCompleteFile))
+	if err != nil {
+		logs.Panic(fmt.Sprintf("Error loading contact request template: %v", err))
+	}
+}
+
 const contactRequestFile = "mail/files/contact-request.html"
 const contactRequestTemplateName = "contact-request"
 
@@ -20,18 +31,22 @@ type ContactRequestMailData struct {
 	Message  string
 }
 
-// InitTemplates reads all template files in
-// IMPORTANT: Template files must end with an empty line
-func InitTemplates() {
-	var err error
-	contactRequestTemplate, err = template.New(contactRequestTemplateName).Parse(mustReadTemplateFile(contactRequestFile))
-	if err != nil {
-		logs.Panic(fmt.Sprintf("Error loading contact request template: %v", err))
-	}
-}
-
 func ParseContactRequestTemplate(writer io.WriteCloser, data ContactRequestMailData) error {
 	return contactRequestTemplate.ExecuteTemplate(writer, contactRequestTemplateName, data)
+}
+
+const onboardingCompleteFile = "mail/files/onboarding-complete.html"
+const onboardingCompleteTemplateName = "onboarding-complete"
+
+var onboardingCompleteTemplate *template.Template
+
+type OnboardingCompleteMailData struct {
+	UserMail       string
+	UserPageAccess string
+}
+
+func ParseOnboardingCompleteTemplate(writer io.WriteCloser, data OnboardingCompleteMailData) error {
+	return onboardingCompleteTemplate.ExecuteTemplate(writer, onboardingCompleteTemplateName, data)
 }
 
 func mustReadTemplateFile(path string) string {

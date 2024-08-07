@@ -158,6 +158,13 @@ func postUser(c *gin.Context) {
 		return
 	}
 
+	_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("could not prepare token for new user: %v -> %v", dto.Mail, err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
+		return
+	}
+
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "user created"})
 }
 
@@ -194,6 +201,27 @@ func putUser(c *gin.Context) {
 	if dto.Blocked && currentUser.Id == dto.UserId {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "can't block your own access"})
 		return
+	}
+
+	if !currentUser.Onboard && dto.Onboard {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "can't 'admin onboard' user"})
+		return
+	}
+
+	if currentUser.Onboard && !dto.Onboard {
+		err := auth.RemoveTokenForUser(framework.GetTx(c), dto.UserId)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))
+			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to remove token for user"})
+			return
+		}
+
+		_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to prepare token for user: %v -> %v", dto.UserId, err))
+			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to prepare token for user"})
+			return
+		}
 	}
 
 	_, err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.RemovePages, dto.AddPages)

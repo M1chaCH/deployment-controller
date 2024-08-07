@@ -1,10 +1,12 @@
-package users
+package auth
 
 import (
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/google/uuid"
+	"github.com/jmoiron/sqlx"
 )
 
 func MakeSureAdminExists() {
@@ -15,13 +17,13 @@ func MakeSureAdminExists() {
 		logs.Panic(fmt.Sprintf("failed to begin transcation: %v", err))
 	}
 
-	var users = make([]userEntity, 0)
-	err = tx.Select(&users, "SELECT * FROM users WHERE admin = true and blocked = false and onboard = true")
+	var userList = make([]users.UserEntity, 0)
+	err = tx.Select(&userList, "SELECT * FROM users WHERE admin = true and blocked = false and onboard = true")
 	if err != nil {
 		logs.Panic(fmt.Sprintf("failed to check if at least one admin exists: %v", err))
 	}
 
-	if len(users) > 0 {
+	if len(userList) > 0 {
 		return
 	}
 
@@ -33,9 +35,14 @@ func MakeSureAdminExists() {
 		logs.Panic(fmt.Sprintf("failed to hash password: %v", err))
 	}
 
-	_, err = tx.Exec("INSERT INTO users (id, mail, password, salt, admin, blocked, onboard) VALUES ($1, $2, $3, $4, $5, $6, $7)", userId, config.Root.Mail, hashedPassword, salt, true, false, true)
+	_, err = tx.Exec("INSERT INTO users (id, mail, password, salt, admin, blocked, onboard) VALUES ($1, $2, $3, $4, $5, $6, $7)", userId, config.Root.Mail, hashedPassword, salt, true, false, false)
 	if err != nil {
 		logs.Panic(fmt.Sprintf("failed to insert user: %v", err))
+	}
+
+	_, err = PrepareToken(func() (*sqlx.Tx, error) { return tx, nil }, userId, config.Root.Mail)
+	if err != nil {
+		logs.Panic(fmt.Sprintf("failed to prepare mfa for default user: %v", err))
 	}
 
 	err = tx.Commit()

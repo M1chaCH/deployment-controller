@@ -21,7 +21,7 @@ const addedAgentContextKey = "agent-changed"
 // 3. handle mfa
 // 4. generate success token
 // returns true: all success & cookie is updated, false: something failed, response is prepared
-func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) string {
+func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem, token string) string {
 	// 1. get token and client
 	currentRequestToken, ok := GetCurrentIdentityToken(c)
 	if !ok {
@@ -37,11 +37,28 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) s
 
 	// 2. make sure user and client are linked
 	if client.RealUserId == "" {
-		_, err = clients.AddUserToClient(client.Id, user.Id)
+		existingClient, found, err := clients.TryFindClientOfUser(user.Id)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("could not link user with client (%s -> %s): %v", client.Id, user.Id, err))
+			logs.Warn(fmt.Sprintf("could not select clients of user due to server error (user:%s): %v", user.Id, err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
 			return LoginStateLoggedOut
+		}
+
+		// if the user already has a client -> merge else -> new client
+		if found {
+			client, err = clients.MergeDevicesAndDelete(framework.GetTx(c), existingClient, client)
+			if err != nil {
+				logs.Warn(fmt.Sprintf("could not merge devices of two clients (1 : %s - 2 : %s): %v", currentRequestToken.Issuer, existingClient.Id, err))
+				AbortWithCooke(c, http.StatusInternalServerError, "login failed")
+				return LoginStateLoggedOut
+			}
+		} else {
+			client, err = clients.AddUserToClient(client.Id, user.Id)
+			if err != nil {
+				logs.Warn(fmt.Sprintf("could not link user with client (%s -> %s): %v", currentRequestToken.Issuer, user.Id, err))
+				AbortWithCooke(c, http.StatusInternalServerError, "login failed")
+				return LoginStateLoggedOut
+			}
 		}
 	} else if client.RealUserId != user.Id {
 		// client has two users -> duplicate client for new user but only keep current device
@@ -50,6 +67,35 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) s
 			logs.Warn(fmt.Sprintf("failed to create new user for existing client: %v", err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
 			return LoginStateLoggedOut
+		}
+	}
+
+	device, found := clients.GetCurrentDevice(client, currentRequestToken.OriginIp, currentRequestToken.OriginAgent)
+	if !found {
+		logs.Warn("device not found for current user, during login...")
+		RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "login failed due to server error"})
+		return LoginStateLoggedOut
+	}
+
+	if currentRequestToken.LoginState == LoginStateTwofactorWaiting && user.Onboard {
+		ok, err = ValidateToken(framework.GetTx(c), user.Id, token, true)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to validate mfa token: %v", err))
+			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
+			return LoginStateLoggedOut
+		}
+
+		if !ok {
+			RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "login failed"})
+			return LoginStateTwofactorWaiting
+		} else {
+			err = clients.MarkDeviceAsValidated(framework.GetTx(c), currentRequestToken.Issuer, device.Id)
+			if err != nil {
+				logs.Warn(fmt.Sprintf("failed to mark device as validated: %v", err))
+				AbortWithCooke(c, http.StatusInternalServerError, "login failed")
+				return LoginStateLoggedOut
+			}
+			device.Validated = true
 		}
 	}
 
@@ -72,30 +118,11 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem) s
 		}
 	}
 
-	// 3. handle mfa
-	// if currently waiting for currentRequestToken, validate currentRequestToken
-
-	// TODO
-	// if user agent is not known -> request mfa currentRequestToken
-	/*	newAgentInThisRequest, newAgentCreated := c.Get(AddedAgentContextKey)
-		// first query should never be true, second should be true if agent is unknown and third should never be false
-		if !client.IsDeviceKnown(currentRequestToken.OriginIp, currentRequestToken.OriginAgent) || (newAgentCreated && newAgentInThisRequest == currentRequestToken.OriginAgent) {
-			tokenForTwoFactorAuth := createIdentityToken(client.Id,
-				user.Id,
-				user.Mail,
-				user.Admin,
-				LoginStateTwofactorWaiting,
-				make([]string, 0),
-				currentRequestToken.OriginIp,
-				currentRequestToken.OriginAgent)
-			c.Set(updatedIdJwtContextKey, tokenForTwoFactorAuth)
-			c.JSON(http.StatusOK, gin.H{"message": "require mfa"})
-			return LoginStateWaitingMfa
-		}*/
-
-	loginState := LoginStateOnboardingWaiting
-	if user.Onboard {
-		loginState = LoginStateLoggedIn
+	loginState := LoginStateLoggedIn
+	if !user.Onboard {
+		loginState = LoginStateOnboardingWaiting
+	} else if !device.Validated {
+		loginState = LoginStateTwofactorWaiting
 	}
 
 	// 4. generate success token

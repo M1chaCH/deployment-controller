@@ -21,12 +21,12 @@ import (
 TODO:
 Middlewares
 1. Error, handle errors and logs critical stuff to elastic, rollback transaction if exists in context
-2. Identity, add IdentityId to context (maybe even add Id to localstorage if determined)
+2. ✔ Identity, add IdentityId to context (maybe even add Id to localstorage if determined)
 3. ✔ Transaction, add transaction to context, commit transaction if success
-4. Auth, check if endpoint needs validation and check JWT Token
+4. ✔ Auth, check if endpoint needs validation and check JWT Token
 
-CORS!!
-- only allow request from michu-tech.com...
+CORS
+- ✔ only allow request from michu-tech.com...
 
 Clean Configs
 - ✔ create yml file
@@ -34,21 +34,20 @@ Clean Configs
 - ✔ https://github.com/go-yaml/yaml
 
 Endpoints
-- Auth (TwoFactor!, Login, LoggedInUserData, IsLoggedIn)
-- Admin (user X Pages, remove user, block user, change password)
+- ✔ Auth (TwoFactor!, Login, LoggedInUserData, IsLoggedIn)
+- ✔ Admin (user X Pages, remove user, block user, change password)
 - Health (mini stats for health)
-- Contact
+- ✔ Contact
 
 Login
-- Mail TwoFacture for new Agent
-- Access granted for agent and ip
-- E-Mail X Password / E-Mail X Code via Mail
+- ✔ Mail TwoFacture for new Agent
+- ✔ Access granted for agent and ip
+- ✔ E-Mail X Password / E-Mail X Code via Auth App
 
 Mail
 - send mails for login
-- send mails for TwoFacture tokens
 - send mails if issues were detected (stats or errors)
-- send mails for contact requests (limit rate)
+- ✔ send mails for contact requests (limit rate)
 
 Identity
 - if user logged in -> userId or similar
@@ -73,7 +72,7 @@ func main() {
 	host := appConfig.Host
 	port := appConfig.Port
 
-	users.MakeSureAdminExists()
+	auth.MakeSureAdminExists()
 	location.InitScheduledLocationCheck()
 	initCaches()
 

@@ -20,6 +20,7 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.GET("/login", getCurrentUser)
 	router.POST("/login", postLogin)
 	router.PUT("/login", putUserPassword)
+	router.GET("/login/onboard/img", getOnboardingTokenImg)
 	router.POST("/login/onboard", postCompleteOnboarding)
 	router.GET("/pages", getOverviewPages)
 	router.POST("/contact", postContact)
@@ -32,6 +33,7 @@ var largeLetterRegex = regexp.MustCompile(`[A-Z]`)
 type loginDto struct {
 	Mail     string `json:"mail" binding:"required"`
 	Password string `json:"password" binding:"required"`
+	Token    string `json:"token"`
 }
 
 func postLogin(c *gin.Context) {
@@ -47,18 +49,13 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	if idToken.LoginState == auth.LoginStateTwofactorWaiting {
-		auth.RespondWithCookie(c, http.StatusNotImplemented, gin.H{"message": "feature not yet implemented..."})
-		return
-	}
-
 	var dto loginDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
 
-	if dto.Mail == "" || dto.Password == "" {
+	if dto.Mail == "" || dto.Password == "" || (idToken.LoginState == auth.LoginStateTwofactorWaiting && len(dto.Token) < 6) {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
@@ -81,7 +78,7 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	state := auth.HandleLoginWithValidCredentials(c, user)
+	state := auth.HandleLoginWithValidCredentials(c, user, dto.Token)
 	if state != auth.LoginStateLoggedOut {
 		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": state})
 	}
@@ -114,6 +111,7 @@ type changePasswordDto struct {
 	UserId      string `json:"userId" binding:"required"`
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword" binding:"required"`
+	Token       string `json:"token"`
 }
 
 func putUserPassword(c *gin.Context) {
@@ -123,10 +121,59 @@ func putUserPassword(c *gin.Context) {
 		return
 	}
 
-	ok = changePasswordHandler(c, idToken, false)
+	var dto changePasswordDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		logs.Info(fmt.Sprintf("failed to bind data from change password request: %v", err))
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
+		return
+	}
+
+	ok = changePasswordHandler(c, dto, idToken, false)
 	if ok {
 		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "password updated"})
 	}
+}
+
+func getOnboardingTokenImg(c *gin.Context) {
+	totpEntity, ok := handleGetOnboardingToken(c)
+	if !ok {
+		return
+	}
+
+	auth.AppendJwtToken(c)
+	c.Header("Content-Type", "image/png")
+	_, err := c.Writer.Write(totpEntity.Image)
+	if err != nil {
+		auth.AbortWithCooke(c, http.StatusInternalServerError, "failed to write image")
+		return
+	}
+}
+
+func handleGetOnboardingToken(c *gin.Context) (auth.MfaTokenEntity, bool) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return auth.MfaTokenEntity{}, false
+	}
+
+	if idToken.LoginState != auth.LoginStateOnboardingWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
+		return auth.MfaTokenEntity{}, false
+	}
+
+	totpEntity, err := auth.LoadTotpForUser(framework.GetTx(c), idToken.UserId)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load totp for user: %s - %v", idToken.UserId, err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load token"})
+		return auth.MfaTokenEntity{}, false
+	}
+
+	if totpEntity.Validated {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "already validated, you should be onboard"})
+		return auth.MfaTokenEntity{}, false
+	}
+
+	return totpEntity, true
 }
 
 func postCompleteOnboarding(c *gin.Context) {
@@ -136,12 +183,73 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	ok = changePasswordHandler(c, idToken, true)
-	if ok {
-		idToken.LoginState = auth.LoginStateLoggedIn
-		auth.SetCurrentIdentityToken(c, idToken)
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
+	var dto changePasswordDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		logs.Info(fmt.Sprintf("failed to bind data from onboarding request: %v", err))
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
+		return
 	}
+
+	valid, err := auth.InitiallyValidateToken(framework.GetTx(c), idToken.UserId, dto.Token)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "invalid token"})
+		return
+	}
+	if !valid {
+		auth.RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "invalid token"})
+		return
+	}
+
+	client, found, err := clients.LoadClientInfo(idToken.Issuer)
+	if err != nil || !found {
+		logs.Warn(fmt.Sprintf("failed to load client info: %v / found: %v", err, found))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+
+	device, found := clients.GetCurrentDevice(client, idToken.OriginIp, idToken.OriginAgent)
+	err = clients.MarkDeviceAsValidated(framework.GetTx(c), idToken.Issuer, device.Id)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to mark device as validated while onboarding: client: %s - device: %s", client.Id, device.Id))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+
+	ok = changePasswordHandler(c, dto, idToken, true)
+	if !ok {
+		return
+	}
+
+	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	if !found {
+		logs.Warn(fmt.Sprintf("failed to load user with id, not found: %s", idToken.UserId))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+	pagesString := ""
+	for i, page := range user.Pages {
+		if !page.GetAccessAllowed() {
+			continue
+		}
+
+		pagesString += page.Url
+
+		if i != len(user.Pages)-1 {
+			pagesString += ", "
+		}
+	}
+
+	err = mail.SendMailToAdmin(mail.TechnicalNoThrottle, "michu-tech Onboarding Complete", func(writer io.WriteCloser) error {
+		return mail.ParseOnboardingCompleteTemplate(writer, mail.OnboardingCompleteMailData{
+			UserMail:       user.Mail,
+			UserPageAccess: pagesString,
+		})
+	})
+
+	idToken.LoginState = auth.LoginStateLoggedIn
+	auth.SetCurrentIdentityToken(c, idToken)
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
 }
 
 type overviewPagesDto struct {
@@ -192,7 +300,7 @@ func getOverviewPages(c *gin.Context) {
 	auth.RespondWithCookie(c, http.StatusOK, result)
 }
 
-func changePasswordHandler(c *gin.Context, idToken auth.IdentityToken, onboarding bool) bool {
+func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.IdentityToken, onboarding bool) bool {
 	if onboarding && idToken.LoginState != auth.LoginStateOnboardingWaiting {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "onboarding failed, not logged in / already onboard?"})
 		return false
@@ -200,13 +308,6 @@ func changePasswordHandler(c *gin.Context, idToken auth.IdentityToken, onboardin
 
 	if !onboarding && idToken.LoginState != auth.LoginStateLoggedIn {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
-		return false
-	}
-
-	var dto changePasswordDto
-	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind data from change password request: %v", err))
-		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return false
 	}
 

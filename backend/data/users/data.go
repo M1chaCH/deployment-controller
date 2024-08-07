@@ -32,7 +32,7 @@ func InitCache() {
 	}
 }
 
-func RefreshCash(txFunc func() (*sqlx.Tx, error)) error {
+func RefreshCash(txFunc framework.LoadableTx) error {
 	initial, err := selectAllUsers(txFunc)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to select all users, cache will not be up to date: %v", err))
@@ -41,7 +41,7 @@ func RefreshCash(txFunc func() (*sqlx.Tx, error)) error {
 
 	err = cache.Initialize(initial)
 	if err != nil {
-		logs.Severe(fmt.Sprintf("could not initialize userEntity cache: %v", err))
+		logs.Severe(fmt.Sprintf("could not initialize UserEntity cache: %v", err))
 		return err
 	}
 
@@ -49,7 +49,7 @@ func RefreshCash(txFunc func() (*sqlx.Tx, error)) error {
 	return nil
 }
 
-func LoadUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
+func LoadUsers(txFunc framework.LoadableTx) ([]UserCacheItem, error) {
 	if cache.IsInitialized() {
 		users, err := cache.GetAllAsArray()
 		if len(users) > 0 || err != nil {
@@ -65,7 +65,7 @@ func LoadUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
 	return users, err
 }
 
-func LoadUserByMail(txFunc func() (*sqlx.Tx, error), mail string) (UserCacheItem, bool) {
+func LoadUserByMail(txFunc framework.LoadableTx, mail string) (UserCacheItem, bool) {
 	if cache.IsInitialized() {
 		receiver := make(chan UserCacheItem)
 		go cache.GetAll(receiver)
@@ -83,10 +83,10 @@ func LoadUserByMail(txFunc func() (*sqlx.Tx, error), mail string) (UserCacheItem
 		return UserCacheItem{}, false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where mail = $1", mail)
 	if err != nil {
-		logs.Info("failed to select userEntity by mail: " + err.Error())
+		logs.Info("failed to select UserEntity by mail: " + err.Error())
 		return UserCacheItem{}, false
 	}
 	if len(result) == 0 {
@@ -109,7 +109,7 @@ func LoadUserByMail(txFunc func() (*sqlx.Tx, error), mail string) (UserCacheItem
 	}, false
 }
 
-func LoadUserById(txFunc func() (*sqlx.Tx, error), id string) (UserCacheItem, bool) {
+func LoadUserById(txFunc framework.LoadableTx, id string) (UserCacheItem, bool) {
 	if cache.IsInitialized() {
 		user, found := cache.Get(id)
 		if found {
@@ -117,17 +117,17 @@ func LoadUserById(txFunc func() (*sqlx.Tx, error), id string) (UserCacheItem, bo
 		}
 	}
 
-	logs.Info(fmt.Sprintf("user not found in cache, selecting userEntity by id: %s", id))
+	logs.Info(fmt.Sprintf("user not found in cache, selecting UserEntity by id: %s", id))
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to check db: %v", err))
 		return UserCacheItem{}, false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where id = $1", id)
 	if err != nil {
-		logs.Info("failed to select userEntity by id: " + err.Error())
+		logs.Info("failed to select UserEntity by id: " + err.Error())
 		return UserCacheItem{}, false
 	}
 	if len(result) == 0 {
@@ -152,7 +152,7 @@ func LoadUserById(txFunc func() (*sqlx.Tx, error), id string) (UserCacheItem, bo
 	return cacheItem, true
 }
 
-func InsertNewUser(txFunc func() (*sqlx.Tx, error), id string, mail string, password string, salt []byte, admin bool, blocked bool, pageIds []string) (UserCacheItem, error) {
+func InsertNewUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, pageIds []string) (UserCacheItem, error) {
 	tx, err := txFunc()
 	if err != nil {
 		return UserCacheItem{}, err
@@ -192,14 +192,14 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	}
 
 	cache.StoreSafeBackground(result)
-	logs.Info(fmt.Sprintf("inserted new userEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds)))
+	logs.Info(fmt.Sprintf("inserted new UserEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds)))
 	return result, nil
 }
 
-func UpdateUser(txFunc func() (*sqlx.Tx, error), id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, pageIdsToRemove []string, pageIdsToAdd []string) (UserCacheItem, error) {
+func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, pageIdsToRemove []string, pageIdsToAdd []string) (UserCacheItem, error) {
 	existingUser, ok := cache.Get(id)
 	if !ok {
-		return UserCacheItem{}, errors.New("userEntity not found")
+		return UserCacheItem{}, errors.New("UserEntity not found")
 	}
 
 	tx, err := txFunc()
@@ -246,7 +246,7 @@ WHERE id = $8
 	return existingUser, nil
 }
 
-func DeleteUser(txFunc func() (*sqlx.Tx, error), id string) error {
+func DeleteUser(txFunc framework.LoadableTx, id string) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -262,7 +262,7 @@ func DeleteUser(txFunc func() (*sqlx.Tx, error), id string) error {
 	return err
 }
 
-func UserExists(txFunc func() (*sqlx.Tx, error), id string) bool {
+func UserExists(txFunc framework.LoadableTx, id string) bool {
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to get transaction for UserExists: %v", err))
@@ -278,14 +278,14 @@ func UserExists(txFunc func() (*sqlx.Tx, error), id string) bool {
 	return true
 }
 
-func SimilarUserExists(txFunc func() (*sqlx.Tx, error), id string, mail string) bool {
+func SimilarUserExists(txFunc framework.LoadableTx, id string, mail string) bool {
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to get transaction for SimilarUserExists: %v", err))
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where id = $1 or mail = $2", id, mail)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -296,14 +296,14 @@ func SimilarUserExists(txFunc func() (*sqlx.Tx, error), id string, mail string) 
 	return true
 }
 
-func MailExists(txFunc func() (*sqlx.Tx, error), mail string, excludedUserId string) bool {
+func MailExists(txFunc framework.LoadableTx, mail string, excludedUserId string) bool {
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to get transaction for MailExists: %v", err))
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where mail = $1 and id != $2", mail, excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -314,14 +314,14 @@ func MailExists(txFunc func() (*sqlx.Tx, error), mail string, excludedUserId str
 	return true
 }
 
-func DifferentAdminExists(txFunc func() (*sqlx.Tx, error), excludedUserId string) bool {
+func DifferentAdminExists(txFunc framework.LoadableTx, excludedUserId string) bool {
 	tx, err := txFunc()
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to get transaction for DifferentAdminExists: %v", err))
 		return false
 	}
 
-	var result []userEntity
+	var result []UserEntity
 	err = tx.Select(&result, "select * from users where admin = true and id != $1", excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
@@ -332,7 +332,7 @@ func DifferentAdminExists(txFunc func() (*sqlx.Tx, error), excludedUserId string
 	return true
 }
 
-func selectAllUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
+func selectAllUsers(txFunc framework.LoadableTx) ([]UserCacheItem, error) {
 	tx, err := txFunc()
 	if err != nil {
 		return nil, err
@@ -340,7 +340,7 @@ func selectAllUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
 
 	result := make([]UserCacheItem, 0)
 
-	users := make([]userEntity, 0)
+	users := make([]UserEntity, 0)
 	err = tx.Select(&users, "SELECT * FROM users")
 	if err != nil {
 		return result, err
@@ -400,7 +400,7 @@ func selectAllUsers(txFunc func() (*sqlx.Tx, error)) ([]UserCacheItem, error) {
 	return result, nil
 }
 
-func selectPagesByUserId(txFunc func() (*sqlx.Tx, error), userId string) ([]UserPageCacheItem, error) {
+func selectPagesByUserId(txFunc framework.LoadableTx, userId string) ([]UserPageCacheItem, error) {
 	tx, err := txFunc()
 	if err != nil {
 		return nil, err
@@ -422,7 +422,7 @@ LEFT JOIN user_page up ON p.id = up.page_id AND up.user_id = $1
 	return userPages, err
 }
 
-func insertUserPages(txFunc func() (*sqlx.Tx, error), userId string, pageIds []string) error {
+func insertUserPages(txFunc framework.LoadableTx, userId string, pageIds []string) error {
 	if len(pageIds) < 1 {
 		return nil
 	}
@@ -444,7 +444,7 @@ func insertUserPages(txFunc func() (*sqlx.Tx, error), userId string, pageIds []s
 	return err
 }
 
-func deleteUserPages(txFunc func() (*sqlx.Tx, error), userId string, pageIds []string) error {
+func deleteUserPages(txFunc framework.LoadableTx, userId string, pageIds []string) error {
 	if len(pageIds) < 1 {
 		return nil
 	}

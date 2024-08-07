@@ -33,7 +33,7 @@ func InitCache() {
 	logs.Info("successfully initialized pages cache")
 }
 
-func LoadPages(txFunc func() (*sqlx.Tx, error)) ([]Page, error) {
+func LoadPages(txFunc framework.LoadableTx) ([]Page, error) {
 	if cache.IsInitialized() {
 		result, err := cache.GetAllAsArray()
 		if err != nil || len(result) > 0 {
@@ -61,7 +61,7 @@ func LoadPages(txFunc func() (*sqlx.Tx, error)) ([]Page, error) {
 	return pages, err
 }
 
-func InsertNewPage(txFunc func() (*sqlx.Tx, error), page Page) error {
+func InsertNewPage(txFunc framework.LoadableTx, page Page) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -75,7 +75,7 @@ func InsertNewPage(txFunc func() (*sqlx.Tx, error), page Page) error {
 	return err
 }
 
-func UpdatePage(txFunc func() (*sqlx.Tx, error), page Page) error {
+func UpdatePage(txFunc framework.LoadableTx, page Page) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -98,7 +98,7 @@ func UpdatePage(txFunc func() (*sqlx.Tx, error), page Page) error {
 	return nil
 }
 
-func DeletePage(txFunc func() (*sqlx.Tx, error), pageId string) error {
+func DeletePage(txFunc framework.LoadableTx, pageId string) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err

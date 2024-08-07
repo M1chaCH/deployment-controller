@@ -4,7 +4,7 @@ import (
 	"time"
 )
 
-type userEntity struct {
+type UserEntity struct {
 	Id        string    `db:"id"`
 	Mail      string    `db:"mail"`
 	Password  string    `db:"password"`
