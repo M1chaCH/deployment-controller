@@ -1,0 +1,35 @@
+host: 0.0.0.0
+port: 8080
+cache_type: local
+db:
+  name: deployment_controller
+  host: docker.for.mac.localhost
+  port: 5432
+  user: postgres
+  password: postgres
+jwt:
+  secret: ZG9uJ3QgZG8gdGhpcw==
+  lifetime: 168 #hous
+  domain: michu-tech-dev.net
+root:
+  mail: test@mail.com
+  password: test
+mail:
+  sender: noreply-deployments@michu-tech.com
+  receiver: admin@michu-tech.com
+  max_count: 5
+  count_duration: 10
+  smtp:
+    host: smtp-relay.mail.com
+    port: 000
+    user: user@mail.com
+    password: password
+cors:
+  origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
+location:
+  host: location.more.info
+  account: user
+  license: password
+  cache_expire_hours: 48
+  check_wait_time_minutes: 10
+  local_ip: my-ip

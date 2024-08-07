@@ -7,5 +7,9 @@ export default defineConfig({
 		port: 5173,
 		strictPort: true,
 		open: false,
+	},
+	build: {
+		outDir: 'build',
+		minify: true
 	}
 });
