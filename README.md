@@ -5,7 +5,7 @@ This project is the top layer to my webserver. It features a reverse proxy that 
 - [x] `n` projects behind one domain, with subdomains or locations
 - [x] optionally require login to access project
 - [x] actually secure login (? :))
-- [x] store who access the pages
+- [x] store who accessed the pages
 - [ ] visualize who accessed the pages
 - [ ] logging, that makes performance and quality reviews easy
 - [ ] send informative mails to the admin and the users
@@ -22,7 +22,7 @@ When developing, it helps to have a reverse proxy setup, so that everything can 
 
 ### proxy
 ```bash
-docker compose up -d -f ./dev-proxy/docker-compose.yml
+docker compose up -d -f ./dev-env/docker-compose.yml
 ```
 **subdomains**  
 To use subdomains in localhost *(on mac)* I had to modify the `/etc/hosts` file. I added lines like this:
@@ -44,7 +44,15 @@ The file `./dev-proxy/test-data.sql` inserts some test pages, so that you can te
 **A host page must exist. (even the host page has an auth request)**
 
 ### ekl
-...
+Tried installing Elasticsearch, Kibana and so on in docker for a dev environment, but screwed this. Will install it directly on the server.
+
+**actually please don't give up with docker...**
+
+#### Installation steps
+1. Install Elasticseach binary  
+  a. configure
+2. Install Kibana binary
+3. Install Agent binary
 
 ### backend
 The backend can usually be started in the IDE or with `go run main.go`.  

@@ -1,0 +1,57 @@
+version: '3.9'
+name: dev_deployment_controller
+
+services:
+  proxy:
+    container_name: deployment_controller_dev_proxy
+    build:
+        context: .
+        dockerfile: Dockerfile
+    ports:
+      - "80:80"
+      - "443:443"
+    restart: no
+    tty: true
+#  elastic:
+#    image: elasticsearch:8.15.0
+#    container_name: deployment_controller_dev_elastic
+#    environment:
+#      - ELASTIC_PASSWORD=wnXSFMbKGwfyAKJLxx*Q
+#      - STACK_VERSION=8.15.0
+#    ports:
+#      - "9200:9200"
+#    volumes:
+#      - ./ekl/elasticsearch.yml:/usr/share/elasticsearch/config/elasticsearch.yml
+#      - deployment_controller_dev_esconfig:/usr/share/elasticsearch/config
+#      - deployment_controller_dev_esdata:/usr/share/elasticsearch/data
+#  kibana:
+#    image: kibana:8.15.0
+#    container_name: deployment_controller_dev_kibana
+#    environment:
+#      KIBANA_PASSWORD: kibana
+#      STACK_VERSION: 8.15.0
+##      SERVER_NAME: kibana.michus-tech-dev.net
+##    - SERVER_BASEPATH=/
+#      ELASTICSEARCH_HOSTS: '["http://deployment_controller_dev_elastic:9200"]'
+#    ports:
+#      - "5601:5601"
+#    volumes:
+#      - ./ekl/kibana.yml:/usr/share/kibana/config/kibana.yml
+#    depends_on:
+#      - elastic
+#  elastic-agent:
+#    image: docker.elastic.co/beats/elastic-agent:8.15.0
+#    container_name: deployment_controller_dev_elastic_agent
+#    environment:
+#      FLEET_SERVER_ENABLE: true
+#      FLEET_SERVER_ELASTICSEARCH_HOST: deployment_controller_dev_elastic:9200
+#      FLEET_SERVER_SERVICE_TOKEN:
+#      FLEET_SERVER_POLICY_ID:
+#    ports:
+#      - "8220:8220"
+#    depends_on:
+#      - elastic
+  
+#volumes:
+#  deployment_controller_dev_esdata:
+#  deployment_controller_dev_esconfig:
