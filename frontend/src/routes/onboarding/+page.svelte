@@ -1,5 +1,6 @@
 <script lang="ts">
 
+    import {goto} from '$app/navigation';
     import {PUBLIC_BACKEND_URL} from '$env/static/public';
     import {isErrorDto, putChangePassword} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
@@ -17,7 +18,13 @@
 
     onMount(() => {
         userStore.subscribe(user => {
-            mail = !isErrorDto(user) ? user?.mail ?? mail : mail
+            if(!isErrorDto(user)) {
+                mail = user?.mail ?? mail
+
+                if(user?.onboard) {
+                    goto("/");
+                }
+            }
         })
     })
 
@@ -34,7 +41,7 @@
             if(isErrorDto(result)) {
                 onboardingFailed = true;
             } else {
-                location.href = "/"
+                await goto("/");
                 return
             }
         }
@@ -99,7 +106,7 @@
     }
 
     .content-card {
-        max-width: unset;
+        max-width: 100%;
         container: onboarding / inline-size;
     }
 

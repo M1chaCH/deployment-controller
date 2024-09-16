@@ -5,10 +5,10 @@ export type LoginState = "logged-in" | "logged-out" | "two-factor-waiting" | "on
 interface LoginDto {
   mail: string;
   password: string;
-  token?: number;
+  token?: string;
 }
 
-export async function postLogin(username: string, password: string, token?: number): Promise<LoginState> {
+export async function postLogin(username: string, password: string, token?: string): Promise<LoginState> {
   const dto: LoginDto = {
     mail: username,
     password: password,

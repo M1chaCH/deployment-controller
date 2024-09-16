@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {goto} from '$app/navigation';
     import {type AdminEditUserDto, type AdminPageDto, type AdminUserDeviceDto, type AdminUserDto, deletePage, deleteUser, getPages, getUsers, savePage, saveUser} from '$lib/api/admin';
     import {type ApiErrorDto, isErrorDto} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
@@ -14,7 +15,7 @@
     onMount(() => {
         userStore.subscribe(user => {
             if(user && (isErrorDto(user) || !user.admin)) {
-                location.href = "/"
+                goto("/");
                 return
             }
         })

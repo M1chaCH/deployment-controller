@@ -229,3 +229,22 @@ services:
       - ELASTIC_PASSWORD=${ELASTIC_PASSWORD}
       - ELASTIC_HOSTS=https://elastic:9200
   
+#  -- currently the certs are not working --
+#  postgres-connector:
+#    depends_on:
+#      elastic:
+#          condition: service_healthy
+#      kibana:
+#        condition: service_healthy
+#    image: docker.elastic.co/enterprise-search/elastic-connectors:8.15.1.0
+#    container_name: deployment_controller_dev-psql_connector
+#    labels:
+#      co.elastic.logs/module: psql_connector
+#    user: root
+#    volumes:
+#      - deployment_controller_dev_escerts:/usr/share/connector/certs
+#      - "./ekl/config-postgres.yml:/config/config.yml"
+#    command: /app/bin/elastic-ingest -c /config/config.yml
+#    environment:
+#        - PSQL_CONNECTOR_KEY=${PSQL_CONNECTOR_KEY}
+#        - ELASTIC_HOSTS=https://elastic:9200

@@ -1,4 +1,5 @@
 <script lang="ts">
+    import {goto} from '$app/navigation';
     import {type LoginState, postLogin} from '$lib/api/auth.js';
     import {isErrorDto} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
@@ -13,12 +14,12 @@
                 mail = user.mail;
 
                 if(user.loginState === "logged-in") {
-                    location.href = parseTargetUrl()
+                    goto(parseTargetUrl())
                     return
                 }
 
                 if(user.loginState === "onboarding-waiting") {
-                    location.href = "/onboarding"
+                    goto("/onboarding");
                     return
                 }
 
@@ -52,10 +53,10 @@
 
         switch (state) {
             case 'logged-in':
-                location.href = parseTargetUrl()
+                await goto(parseTargetUrl())
                 return
             case 'onboarding-waiting':
-                location.href = "/onboarding"
+                await goto("/onboarding")
                 return
             case 'logged-out':
                 failed = true
