@@ -51,12 +51,13 @@
             state = "logged-out"
         }
 
+        // these redirects can't be routed using the svelte kit router because I'd like to reload the user, which is in a readable store.
         switch (state) {
             case 'logged-in':
-                await goto(parseTargetUrl())
+                location.href = parseTargetUrl()
                 return
             case 'onboarding-waiting':
-                await goto("/onboarding")
+                location.href = "/onboarding"
                 return
             case 'logged-out':
                 failed = true
@@ -97,7 +98,7 @@
                 </div>
                 {#if mfa}
                     <TokenInput on:input={e => token = e.detail.value}/>
-                    <p class="subtext">New Device, TwoFactor authentication required.</p>
+                    <p class="subtext" style="margin-top: 12px;">New Device, TwoFactor authentication required.</p>
                 {/if}
             </form>
             {#if failed}

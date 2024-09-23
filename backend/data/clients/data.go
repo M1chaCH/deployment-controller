@@ -386,21 +386,25 @@ func MarkDeviceAsValidated(txLoader framework.LoadableTx, clientId string, devic
 }
 
 func MergeDevicesAndDelete(txLoader framework.LoadableTx, target ClientCacheItem, toMerge ClientCacheItem) (ClientCacheItem, error) {
-	devicesToSearch := target.Devices
+	// 1. find devices that are new to target
+	// 2. insert found device to target
+	// 3. if toMerge has no user, remove client and devices else keep client
+
+	devicesAlreadyInTarget := target.Devices
 	var devicesToAdd []ClientDevice
 	for _, device := range toMerge.Devices {
 		foundIndex := -1
-		for j, searchDevice := range devicesToSearch {
-			if device.IpAddress == searchDevice.IpAddress && device.UserAgent == searchDevice.UserAgent {
+		for j, existingDevice := range devicesAlreadyInTarget {
+			if device.IpAddress == existingDevice.IpAddress && device.UserAgent == existingDevice.UserAgent {
 				foundIndex = j
 				break
 			}
 		}
 
 		if foundIndex == -1 {
+			device.Id = uuid.NewString()
+			device.ClientId = target.Id
 			devicesToAdd = append(devicesToAdd, device)
-		} else {
-			devicesToSearch = append(devicesToSearch[:foundIndex], devicesToSearch[foundIndex+1:]...)
 		}
 	}
 
@@ -420,27 +424,33 @@ VALUES (:id, :client_id, :ip_address, :user_agent, :ip_location_check_error, :cr
 		}
 	}
 
-	_, err = tx.Exec("DELETE FROM clients WHERE id = $1", toMerge.Id)
-	if err != nil {
-		return ClientCacheItem{}, err
+	if toMerge.RealUserId == "" {
+		_, err = tx.Exec("DELETE FROM clients WHERE id = $1", toMerge.Id)
+		if err != nil {
+			return ClientCacheItem{}, err
+		}
+
+		err = cache.Remove(toMerge.Id)
+		if err != nil {
+			return ClientCacheItem{}, err
+		}
 	}
 
-	err = cache.Remove(toMerge.Id)
-	if err != nil {
-		return ClientCacheItem{}, err
-	}
+	logs.Info(fmt.Sprintf("merged devices of client %s into client %s (%d devices) -- updating caches",
+		toMerge.Id, target.Id, len(target.Devices)))
 
 	err = cache.Remove(target.Id)
 	if err != nil {
 		return ClientCacheItem{}, err
 	}
 
-	logs.Info(fmt.Sprintf("merged devices of client %s into client %s (%d devices)", target.Id, toMerge.Id, len(target.Devices)))
-	client, found, err := LoadClientInfo(target.Id)
-	if !found && err == nil {
-		logs.Warn(fmt.Sprintf("just manipulated client devices, but client was not found: id:%s", target.Id))
+	target.Devices = append(target.Devices, devicesToAdd...)
+	err = cache.Store(target)
+	if err != nil {
+		return ClientCacheItem{}, err
 	}
-	return client, err
+
+	return target, err
 }
 
 func selectAllClients() ([]ClientCacheItem, error) {

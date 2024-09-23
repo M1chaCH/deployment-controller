@@ -37,18 +37,18 @@ func HandleLoginWithValidCredentials(c *gin.Context, user users.UserCacheItem, t
 
 	// 2. make sure user and client are linked
 	if client.RealUserId == "" {
-		existingClient, found, err := clients.TryFindClientOfUser(user.Id)
+		existingUserClient, found, err := clients.TryFindClientOfUser(user.Id)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("could not select clients of user due to server error (user:%s): %v", user.Id, err))
 			AbortWithCooke(c, http.StatusInternalServerError, "login failed")
 			return LoginStateLoggedOut
 		}
 
-		// if the user already has a client -> merge else -> new client
+		// if the user already has a client -> merge else -> add user to client
 		if found {
-			client, err = clients.MergeDevicesAndDelete(framework.GetTx(c), existingClient, client)
+			client, err = clients.MergeDevicesAndDelete(framework.GetTx(c), existingUserClient, client)
 			if err != nil {
-				logs.Warn(fmt.Sprintf("could not merge devices of two clients (1 : %s - 2 : %s): %v", currentRequestToken.Issuer, existingClient.Id, err))
+				logs.Warn(fmt.Sprintf("could not merge devices of two clients (1 : %s - 2 : %s): %v", currentRequestToken.Issuer, existingUserClient.Id, err))
 				AbortWithCooke(c, http.StatusInternalServerError, "login failed")
 				return LoginStateLoggedOut
 			}

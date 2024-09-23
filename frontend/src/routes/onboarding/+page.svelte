@@ -41,7 +41,8 @@
             if(isErrorDto(result)) {
                 onboardingFailed = true;
             } else {
-                await goto("/");
+                // want to do a page reload, to update caches
+                location.href = "/";
                 return
             }
         }
