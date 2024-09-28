@@ -12,6 +12,9 @@ ADD pages/portfolio.html /usr/share/nginx/pages/portfolio/index.html
 ADD pages/room-automation.html /usr/share/nginx/pages/room-automation/index.html
 #teachu
 ADD pages/teachu.html /usr/share/nginx/pages/teachu/index.html
+# error page
+ADD pages/error.html /var/www/html/nginx_error/index.html
+ADD pages/favicon.ico /var/www/html/nginx_error/favicon.ico
 
 EXPOSE 80
 
