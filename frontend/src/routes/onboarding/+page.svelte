@@ -49,6 +49,10 @@
     }
 </script>
 
+<svelte:head>
+    <title>Micha Schweizer @ Onboarding</title>
+</svelte:head>
+
 <PageOutline pageName="Onboarding">
     <div slot="description">
         <p>Please change your password and setup your two factor login to activate your account.</p>

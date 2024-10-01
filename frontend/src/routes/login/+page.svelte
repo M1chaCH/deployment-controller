@@ -80,6 +80,10 @@
     }
 </script>
 
+<svelte:head>
+    <title>Micha Schweizer @ Login</title>
+</svelte:head>
+
 <PageOutline pageName="Login">
     <div slot="description">
         <p>Logging in can grant you access to more services.</p>

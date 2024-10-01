@@ -57,6 +57,10 @@
     }
 </script>
 
+<svelte:head>
+    <title>Micha Schweizer @ Legal</title>
+</svelte:head>
+
 <PageOutline pageName="Legal">
     <p slot="description">On this page I have documented everything that needs to be done.</p>
     <div slot="content" class="overview-container">
