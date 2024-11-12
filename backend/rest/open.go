@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
 	"github.com/M1chaCH/deployment-controller/data/clients"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
@@ -16,12 +17,20 @@ import (
 	"regexp"
 )
 
+/*
+TODO
+- new login process (login -> onboarding / MFA | NOT login -> login + MFA)
+- during onboarding you should be able to select a MFA method
+- a lot of testing
+*/
+
 func InitOpenEndpoints(router gin.IRouter) {
 	router.GET("/login", getCurrentUser)
 	router.POST("/login", postLogin)
 	router.PUT("/login", putUserPassword)
 	router.GET("/login/onboard/img", getOnboardingTokenImg)
 	router.POST("/login/onboard", postCompleteOnboarding)
+	router.POST("/login/mfa", postMfaCheck)
 	router.GET("/pages", getOverviewPages)
 	router.POST("/contact", postContact)
 }
@@ -33,29 +42,16 @@ var largeLetterRegex = regexp.MustCompile(`[A-Z]`)
 type loginDto struct {
 	Mail     string `json:"mail" binding:"required"`
 	Password string `json:"password" binding:"required"`
-	Token    string `json:"token"`
 }
 
 func postLogin(c *gin.Context) {
-	idToken, ok := auth.GetCurrentIdentityToken(c)
-	if !ok {
-		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "missing user info"})
-		return
-	}
-
-	// TODO, do we really want this? this will let a user through even if his password is incorrect.
-	if idToken.LoginState == auth.LoginStateLoggedIn || idToken.LoginState == auth.LoginStateOnboardingWaiting {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": auth.LoginStateLoggedIn})
-		return
-	}
-
 	var dto loginDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
 
-	if dto.Mail == "" || dto.Password == "" || (idToken.LoginState == auth.LoginStateTwofactorWaiting && len(dto.Token) < 6) {
+	if dto.Mail == "" || dto.Password == "" {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
@@ -78,10 +74,7 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	state := auth.HandleLoginWithValidCredentials(c, user, dto.Token)
-	if state != auth.LoginStateLoggedOut {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": state})
-	}
+	auth.HandleAndCompleteLogin(c, user)
 }
 
 func getCurrentUser(c *gin.Context) {
@@ -176,6 +169,7 @@ func handleGetOnboardingToken(c *gin.Context) (auth.MfaTokenEntity, bool) {
 	return totpEntity, true
 }
 
+// TODO cleanup? (at least update for new multiple MFA stuff)
 func postCompleteOnboarding(c *gin.Context) {
 	idToken, ok := auth.GetCurrentIdentityToken(c)
 	if !ok {
@@ -227,15 +221,23 @@ func postCompleteOnboarding(c *gin.Context) {
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
+
+	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), idToken.UserId)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+
 	pagesString := ""
-	for i, page := range user.Pages {
+	for i, page := range pageAccess.Pages {
 		if !page.GetAccessAllowed() {
 			continue
 		}
 
-		pagesString += page.Url
+		pagesString += page.TechnicalName
 
-		if i != len(user.Pages)-1 {
+		if i != len(pageAccess.Pages)-1 {
 			pagesString += ", "
 		}
 	}
@@ -252,6 +254,31 @@ func postCompleteOnboarding(c *gin.Context) {
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
 }
 
+type mfaCheckDto struct {
+	Token string `json:"token"`
+}
+
+func postMfaCheck(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState != auth.LoginStateTwofactorWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "invalid state"})
+		return
+	}
+
+	var dto mfaCheckDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "mfa check form invalid"})
+		return
+	}
+
+	auth.HandleAndCompleteMfaVerification(c, idToken, dto.Token)
+}
+
 type overviewPagesDto struct {
 	PageTitle       string `json:"pageTitle" binding:"required"`
 	PageDescription string `json:"pageDescription" binding:"required"`
@@ -263,37 +290,42 @@ type overviewPagesDto struct {
 func getOverviewPages(c *gin.Context) {
 	user, found := auth.GetCurrentUser(c)
 
-	result := make([]overviewPagesDto, len(user.Pages))
-	if found {
-		for i, page := range user.Pages {
-			result[i] = overviewPagesDto{
-				PageTitle:       page.Title,
-				PageDescription: page.Description,
-				PageUrl:         page.Url,
-				PrivatePage:     page.Private,
-				AccessAllowed:   page.AccessAllowed,
+	userId := user.Id
+	if !found {
+		userId = pageaccess.AnonymousUserId
+	}
+
+	pageEntities, err := pages.LoadPages(framework.GetTx(c))
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load pages: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load pages"})
+		return
+	}
+
+	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), userId)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load page access"})
+		return
+	}
+
+	result := make([]overviewPagesDto, len(pageEntities))
+	for i, p := range pageEntities {
+		hasAccess := !p.PrivatePage
+
+		for _, pa := range pageAccess.Pages {
+			if pa.PageId == p.Id {
+				hasAccess = pa.Access
+				break
 			}
 		}
 
-		auth.RespondWithCookie(c, http.StatusOK, result)
-		return
-	}
-
-	allPages, err := pages.LoadPages(framework.GetTx(c))
-	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load all pages for overview: %v", err))
-		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not load pages"})
-		return
-	}
-
-	result = make([]overviewPagesDto, len(allPages))
-	for i, page := range allPages {
 		result[i] = overviewPagesDto{
-			PageTitle:       page.Title,
-			PageDescription: page.Description,
-			PageUrl:         page.Url,
-			PrivatePage:     page.PrivatePage,
-			AccessAllowed:   !page.PrivatePage,
+			PageTitle:       p.Title,
+			PageDescription: p.Description,
+			PageUrl:         p.Url,
+			PrivatePage:     p.PrivatePage,
+			AccessAllowed:   hasAccess,
 		}
 	}
 
@@ -342,12 +374,14 @@ func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.I
 		return false
 	}
 
-	_, err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, make([]string, 0), make([]string, 0))
+	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, make([]string, 0), make([]string, 0))
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to save new password for user: %s -> %v", dto.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not save changes to user!"})
 		return false
 	}
+
+	pageaccess.DeleteUserPageAccessCache(user.Id)
 
 	return true
 }
@@ -371,6 +405,7 @@ func postContact(c *gin.Context) {
 		return
 	}
 
+	// TODO make configurable
 	if len(dto.Message) > 1000 {
 		auth.RespondWithCookie(c, http.StatusRequestEntityTooLarge, gin.H{"message": "message too long"})
 		return
@@ -382,6 +417,7 @@ func postContact(c *gin.Context) {
 		deviceId = "not found: " + err.Error()
 	}
 
+	// todo cleanup this api, create the function in the mail package, not as the param
 	err = mail.SendMailToAdmin(idToken.Issuer, "michu-tech Contact request", func(writer io.WriteCloser) error {
 		return mail.ParseContactRequestTemplate(writer, mail.ContactRequestMailData{
 			ClientId: idToken.Issuer,

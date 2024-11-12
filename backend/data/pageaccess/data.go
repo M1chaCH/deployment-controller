@@ -1,0 +1,128 @@
+package pageaccess
+
+import (
+	"fmt"
+	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/logs"
+)
+
+func InitCache() {
+	logs.Info("initializing pageaccess cache")
+
+	initialCacheEntries := make([]UserPageAccess, 0)
+
+	tx, err := framework.DB().Beginx()
+
+	var pageAccessResult []userPageAccessResult
+	err = tx.Select(&pageAccessResult, `
+SELECT p.id as page_id, up.user_id, p.technical_name, p.private_page,
+       CASE
+           WHEN (up.user_id IS NOT NULL AND u.onboard AND NOT u.blocked)
+               OR p.private_page IS NOT TRUE
+               THEN TRUE
+           ELSE FALSE
+           END AS has_access
+FROM pages AS p
+         LEFT JOIN user_page up ON p.id = up.page_id
+         LEFT JOIN users u ON up.user_id = u.id
+WHERE u.Id IS NOT NULL
+`)
+	if err != nil {
+		logs.Panic(fmt.Sprintf("failed to initialize pageaccess cache: %v", err))
+	}
+
+	userPageAccess := map[string][]PageAccessPage{}
+	for _, result := range pageAccessResult {
+		currentUserAccess, ok := userPageAccess[result.UserId]
+		if !ok {
+			currentUserAccess = []PageAccessPage{}
+		}
+
+		currentUserAccess = append(currentUserAccess, PageAccessPage{
+			PageId:        result.PageId,
+			Access:        result.HasAccess,
+			TechnicalName: result.TechnicalName,
+			PrivatePage:   result.PrivatePage,
+		})
+		userPageAccess[result.UserId] = currentUserAccess
+	}
+
+	for key, value := range userPageAccess {
+		initialCacheEntries = append(initialCacheEntries, UserPageAccess{
+			UserId: key,
+			Pages:  value,
+		})
+		if err != nil {
+			logs.Panic(fmt.Sprintf("failed to cache pageaccess: %v", err))
+		}
+	}
+
+	// setup cache try for not logged-in requests
+	anonPageAccess := make([]PageAccessPage, 0)
+	err = tx.Select(&anonPageAccess, `
+SELECT p.id as page_id, p.technical_name, NOT p.private_page as has_access
+FROM pages p
+`)
+	if err != nil {
+		logs.Panic(fmt.Sprintf("failed to initialize anon pageaccess cache: %v", err))
+	}
+
+	initialCacheEntries = append(initialCacheEntries, UserPageAccess{
+		UserId: AnonymousUserId,
+		Pages:  anonPageAccess,
+	})
+
+	err = cache.Initialize(initialCacheEntries)
+	if err != nil {
+		logs.Panic(fmt.Sprintf("failed to initialize pageaccess cache: %v", err))
+	}
+	logs.Info("successfully initialized pageaccess cache")
+}
+
+func LoadUserPageAccess(txFunc framework.LoadableTx, userId string) (UserPageAccess, error) {
+	access, found := cache.Get(userId)
+	if found {
+		return access, nil
+	}
+
+	tx, err := txFunc()
+	if err != nil {
+		return UserPageAccess{}, err
+	}
+
+	var pageAccessResult []PageAccessPage
+	err = tx.Select(&pageAccessResult, `
+SELECT p.id as page_id, p.technical_name, p.private_page,
+       CASE
+           WHEN (up.user_id IS NOT NULL AND u.onboard AND NOT u.blocked)
+               OR p.private_page IS NOT TRUE
+               THEN TRUE
+           ELSE FALSE
+           END AS has_access
+FROM pages AS p
+         LEFT JOIN user_page up ON p.id = up.page_id AND up.user_id = $1
+		 LEFT JOIN users u ON u.id = up.user_id
+`, userId)
+	if err != nil {
+		return UserPageAccess{}, err
+	}
+
+	userPageAccess := UserPageAccess{
+		UserId: userId,
+		Pages:  pageAccessResult,
+	}
+
+	cache.StoreSafeBackground(userPageAccess)
+	return userPageAccess, nil
+}
+
+func DeleteUserPageAccessCache(userId string) {
+	err := cache.Remove(userId)
+	if err != nil {
+		logs.Warn("failed to delete user page access cache entry")
+	}
+}
+
+func ClearCache() {
+	cache.Clear()
+}

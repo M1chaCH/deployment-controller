@@ -1,6 +1,6 @@
 <script lang="ts">
     import {goto} from '$app/navigation';
-    import {type LoginState, postLogin} from '$lib/api/auth.js';
+    import {type LoginState, postLogin, postMfaValidation} from '$lib/api/auth.js';
     import {isErrorDto} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
     import MiniNotification from '$lib/components/MiniNotification.svelte';
@@ -30,7 +30,7 @@
 
     let mfa = false;
     let failed = false;
-    $: formValid = mail?.length > 3 && password && (!mfa || (token?.length === 6 && !isNaN(parseInt(token))));
+    $: formValid = (!mfa && mail?.length > 3 && password) || (mfa && token?.length === 6 && !isNaN(parseInt(token)));
 
     let mail = "";
     let password = "";
@@ -45,7 +45,16 @@
 
         let state: LoginState;
         try {
-             state = await postLogin(mail, password, token);
+            if(mfa) {
+                const tokenValid = await postMfaValidation(token);
+                if(tokenValid) {
+                    state = "logged-in";
+                } else {
+                    state = "two-factor-waiting"
+                }
+            } else {
+                state = await postLogin(mail, password);
+            }
         } catch (e) {
             console.error(e);
             state = "logged-out"
@@ -92,15 +101,16 @@
     <div slot="content" class="page" id="login">
         <div class="content-card">
             <form class="login-inputs">
-                <div class="carbon-input">
-                    <label for="mail">E-Mail</label>
-                    <input id="mail" type="email" bind:value={mail}/>
-                </div>
-                <div class="carbon-input">
-                    <label for="password">Password</label>
-                    <input id="password" type="password" bind:value={password}/>
-                </div>
-                {#if mfa}
+                {#if !mfa}
+                    <div class="carbon-input">
+                        <label for="mail">E-Mail</label>
+                        <input id="mail" type="email" bind:value={mail}/>
+                    </div>
+                    <div class="carbon-input">
+                        <label for="password">Password</label>
+                        <input id="password" type="password" bind:value={password}/>
+                    </div>
+                {:else}
                     <TokenInput on:input={e => token = e.detail.value}/>
                     <p class="subtext" style="margin-top: 12px;">New Device, TwoFactor authentication required.</p>
                 {/if}

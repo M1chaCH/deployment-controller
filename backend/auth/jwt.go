@@ -81,6 +81,17 @@ func parseIdentityToken(tokenString string) (IdentityToken, error) {
 		return IdentityToken{}, errors.New("user unauthenticated")
 	}
 
+	expiresClaim, err := claims.GetExpirationTime()
+	if err != nil || expiresClaim.Before(time.Now()) {
+		logs.Warn("JWT has expired or the expiration date could not be parsed")
+		return IdentityToken{}, errors.New("user unauthenticated")
+	}
+
+	if claims.IssuedAt.After(time.Now()) {
+		logs.Warn("JWT token was issued in the future")
+		return IdentityToken{}, errors.New("user unauthenticated")
+	}
+
 	return claims, nil
 }
 
@@ -93,12 +104,6 @@ func createIdentityToken(
 	ip string,
 	userAgent string,
 ) IdentityToken {
-	tokenLifetime := time.Duration(framework.Config().JWT.Lifetime)
-	if tokenLifetime <= 0 {
-		tokenLifetime = 24
-	}
-	tokenLifetime *= time.Hour
-
 	return IdentityToken{
 		Mail:        mail,
 		Admin:       admin,
@@ -109,14 +114,14 @@ func createIdentityToken(
 		RegisteredClaims: jwt.RegisteredClaims{
 			Issuer:    clientId,
 			IssuedAt:  jwt.NewNumericDate(time.Now()),
-			ExpiresAt: jwt.NewNumericDate(time.Now().Add(tokenLifetime)),
+			ExpiresAt: getNewTokenExpirationTime(),
 		},
 	}
 }
 
 func getIdentityToken(c *gin.Context, key string) (IdentityToken, bool) {
 	value, exists := c.Get(key)
-	if !exists {
+	if !exists || value == nil {
 		return IdentityToken{}, false
 	}
 
@@ -136,4 +141,13 @@ func getSecret() []byte {
 	}
 
 	return []byte(config.JWT.Secret)
+}
+
+func getNewTokenExpirationTime() *jwt.NumericDate {
+	tokenLifetime := time.Duration(framework.Config().JWT.Lifetime)
+	if tokenLifetime <= 0 {
+		tokenLifetime = 24
+	}
+	tokenLifetime *= time.Hour
+	return jwt.NewNumericDate(time.Now().Add(tokenLifetime))
 }

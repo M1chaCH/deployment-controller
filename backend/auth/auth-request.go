@@ -2,7 +2,7 @@ package auth
 
 import (
 	"fmt"
-	"github.com/M1chaCH/deployment-controller/data/pages"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
@@ -21,21 +21,21 @@ func authRequest(c *gin.Context) {
 		return
 	}
 
-	user, found := GetCurrentUser(c)
+	token, found := GetCurrentIdentityToken(c)
 
-	if found {
-		checkTargetAccess(c, technicalName, user.Pages)
-		return
+	userId := token.UserId
+	if !found || userId == "" {
+		userId = pageaccess.AnonymousUserId
 	}
 
-	allPages, err := pages.LoadPages(framework.GetTx(c))
+	userPageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), pageaccess.AnonymousUserId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load pages, auth request failed: %v", err))
-		RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "page not found"})
+		logs.Warn(fmt.Sprintf("Failed to load user page access for user '%s': %v", token.UserId, err))
+		RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "access denied"})
 		return
 	}
 
-	checkTargetAccess(c, technicalName, allPages)
+	checkTargetAccess(c, technicalName, userPageAccess.Pages)
 }
 
 type assertablePage interface {
@@ -43,8 +43,8 @@ type assertablePage interface {
 	GetAccessAllowed() bool
 }
 
-func checkTargetAccess[T assertablePage](c *gin.Context, target string, allPages []T) {
-	for _, page := range allPages {
+func checkTargetAccess[T assertablePage](c *gin.Context, target string, pages []T) {
+	for _, page := range pages {
 		if strings.ToLower(page.GetTechnicalName()) == strings.ToLower(target) {
 			if page.GetAccessAllowed() {
 				RespondWithCookie(c, http.StatusNoContent, nil)

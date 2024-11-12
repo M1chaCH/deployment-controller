@@ -5,14 +5,16 @@ export type LoginState = "logged-in" | "logged-out" | "two-factor-waiting" | "on
 interface LoginDto {
   mail: string;
   password: string;
-  token?: string;
 }
 
-export async function postLogin(username: string, password: string, token?: string): Promise<LoginState> {
+interface MfaTokenDto {
+  token: string;
+}
+
+export async function postLogin(username: string, password: string): Promise<LoginState> {
   const dto: LoginDto = {
     mail: username,
     password: password,
-    token: token,
   }
   const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login`, {
     method: 'POST',
@@ -25,8 +27,24 @@ export async function postLogin(username: string, password: string, token?: stri
 
   if(response.ok) {
     const data = await response.json()
-    return data.message ?? "logged-out"
+    return data.state ?? "logged-out"
   } else {
     return "logged-out"
   }
+}
+
+export async function postMfaValidation(mfaToken: string): Promise<boolean> {
+  const dto: MfaTokenDto = {
+    token: mfaToken,
+  }
+  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login/mfa`, {
+    method: 'POST',
+    body: JSON.stringify(dto),
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    credentials: 'include'
+  })
+
+  return response.ok;
 }

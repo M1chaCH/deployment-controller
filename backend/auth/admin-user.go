@@ -18,7 +18,7 @@ func MakeSureAdminExists() {
 	}
 
 	var userList = make([]users.UserEntity, 0)
-	err = tx.Select(&userList, "SELECT * FROM users WHERE admin = true and blocked = false and onboard = true")
+	err = tx.Select(&userList, "SELECT * FROM users WHERE admin = true and blocked = false")
 	if err != nil {
 		logs.Panic(fmt.Sprintf("failed to check if at least one admin exists: %v", err))
 	}

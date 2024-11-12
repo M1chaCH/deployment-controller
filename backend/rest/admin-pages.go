@@ -5,8 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/pages"
-	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
@@ -45,12 +45,7 @@ func postPage(c *gin.Context) {
 		return
 	}
 
-	err = users.RefreshCash(tx)
-	if err != nil {
-		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to refresh cash"})
-		return
-	}
-
+	pageaccess.ClearCache()
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "created page"})
 }
 
@@ -78,12 +73,7 @@ func putPage(c *gin.Context) {
 		return
 	}
 
-	err = users.RefreshCash(tx)
-	if err != nil {
-		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to refresh cash"})
-		return
-	}
-
+	pageaccess.ClearCache()
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "updated page"})
 }
 
@@ -97,12 +87,7 @@ func deletePage(c *gin.Context) {
 		return
 	}
 
-	err = users.RefreshCash(tx)
-	if err != nil {
-		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to refresh cash"})
-		return
-	}
-
+	pageaccess.ClearCache()
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "deleted page"})
 }
 
