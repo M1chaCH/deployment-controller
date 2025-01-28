@@ -3,6 +3,7 @@ package rest
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/users"
@@ -113,6 +114,7 @@ type editUserDto struct {
 	Admin       bool     `json:"admin"`
 	Blocked     bool     `json:"blocked"`
 	Onboard     bool     `json:"onboard,omitempty"`
+	MfaType     string   `json:"mfaType"`
 	AddPages    []string `json:"addPages,omitempty"`
 	RemovePages []string `json:"removePages,omitempty"`
 }
@@ -142,14 +144,14 @@ func postUser(c *gin.Context) {
 		return
 	}
 
-	err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.AddPages)
+	err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.MfaType, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not insert new user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
 		return
 	}
 
-	_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+	err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not prepare token for new user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
@@ -200,14 +202,14 @@ func putUser(c *gin.Context) {
 	}
 
 	if currentUser.Onboard && !dto.Onboard {
-		err := auth.RemoveTokenForUser(framework.GetTx(c), dto.UserId)
+		err := mfa.ClearTokenOfUser(framework.GetTx(c), dto.UserId)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to remove token for user"})
 			return
 		}
 
-		_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+		err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to prepare token for user: %v -> %v", dto.UserId, err))
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to prepare token for user"})
@@ -215,7 +217,7 @@ func putUser(c *gin.Context) {
 		}
 	}
 
-	err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.RemovePages, dto.AddPages)
+	err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.MfaType, dto.RemovePages, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not update user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to update user"})

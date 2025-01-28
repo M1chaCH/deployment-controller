@@ -14,6 +14,7 @@ type UserEntity struct {
 	LastLogin time.Time `db:"last_login"`
 	Blocked   bool      `db:"blocked"`
 	Onboard   bool      `db:"onboard"`
+	MfaType   string    `db:"mfa_type"`
 }
 
 type userPageAccessEntity struct {

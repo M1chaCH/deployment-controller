@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/pages"
@@ -105,6 +106,7 @@ type changePasswordDto struct {
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword" binding:"required"`
 	Token       string `json:"token"`
+	MfaType     string `json:"mfaType"`
 }
 
 func putUserPassword(c *gin.Context) {
@@ -128,45 +130,40 @@ func putUserPassword(c *gin.Context) {
 }
 
 func getOnboardingTokenImg(c *gin.Context) {
-	totpEntity, ok := handleGetOnboardingToken(c)
+	image, ok := handleGetOnboardingToken(c)
 	if !ok {
 		return
 	}
 
 	auth.AppendJwtToken(c)
 	c.Header("Content-Type", "image/png")
-	_, err := c.Writer.Write(totpEntity.Image)
+	_, err := c.Writer.Write(image)
 	if err != nil {
 		auth.AbortWithCooke(c, http.StatusInternalServerError, "failed to write image")
 		return
 	}
 }
 
-func handleGetOnboardingToken(c *gin.Context) (auth.MfaTokenEntity, bool) {
+func handleGetOnboardingToken(c *gin.Context) ([]byte, bool) {
 	idToken, ok := auth.GetCurrentIdentityToken(c)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
 	if idToken.LoginState != auth.LoginStateOnboardingWaiting {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
-	totpEntity, err := auth.LoadTotpForUser(framework.GetTx(c), idToken.UserId)
+	image, err := mfa.GetQrImage(framework.GetTx(c), idToken.UserId)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to load totp for user: %s - %v", idToken.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load token"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
-	if totpEntity.Validated {
-		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "already validated, you should be onboard"})
-		return auth.MfaTokenEntity{}, false
-	}
-
-	return totpEntity, true
+	return image, true
 }
 
 // TODO cleanup? (at least update for new multiple MFA stuff)
@@ -184,7 +181,7 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	valid, err := auth.InitiallyValidateToken(framework.GetTx(c), idToken.UserId, dto.Token)
+	valid, err := mfa.IntialValidate(framework.GetTx(c), idToken.UserId, dto.MfaType, dto.Token)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "invalid token"})
@@ -374,7 +371,7 @@ func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.I
 		return false
 	}
 
-	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, make([]string, 0), make([]string, 0))
+	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, user.MfaType, make([]string, 0), make([]string, 0))
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to save new password for user: %s -> %v", dto.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not save changes to user!"})

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
@@ -73,7 +74,7 @@ func HandleAndCompleteLogin(c *gin.Context, user users.UserEntity) {
 		return
 	}
 
-	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, time.Now(), make([]string, 0), make([]string, 0))
+	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, time.Now(), user.MfaType, make([]string, 0), make([]string, 0))
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to update last login of user: %v", err))
 		AbortWithCooke(c, http.StatusInternalServerError, "login failed")
@@ -100,9 +101,9 @@ func HandleAndCompleteLogin(c *gin.Context, user users.UserEntity) {
 }
 
 func HandleAndCompleteMfaVerification(c *gin.Context, idToken IdentityToken, mfaToken string) {
-	ok, err := ValidateToken(framework.GetTx(c), idToken.UserId, mfaToken, true)
+	ok, err := mfa.Validate(framework.GetTx(c), idToken.UserId, idToken.MfaType, mfaToken, true)
 	if err != nil {
-		if err.Error() == ErrNotValidated {
+		if err.Error() == framework.ErrNotValidated {
 			logs.Severe(fmt.Sprintf("failed to validate token - user is not onboard - this must be a bug, this case should not happen: %v", err))
 			idToken.LoginState = LoginStateOnboardingWaiting
 			SetCurrentIdentityToken(c, idToken)

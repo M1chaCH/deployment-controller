@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Authentication Code</title>
+</head>
+<body>
+<h1>michu-tech login request</h1>
+<p>Hi! There has been a login request for your account on michu-tech. Use the following code to authenticate.</p>
+<p style="
+background-color: darkslategray;
+border-radius: 2px;
+padding: 8px;
+margin: 24px;
+letter-spacing: 4px;
+font-size: 36px;
+font-weight: bold;
+">
+    {{ .MfaCode }}
+</p>
+<p><b>IMPORTANT:</b> If it wasn't you who tried to log in, please immediately contact the admin here: {{ .AdminMail }}!</p>
+<br>
+<p>Best Regards</p>
+<p>system.michu-tech.com 🫡</p>
+</body>
+</html>

@@ -65,7 +65,7 @@ func LoadUserById(txFunc framework.LoadableTx, id string) (UserEntity, bool) {
 	return user, true
 }
 
-func InsertNewUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, pageIds []string) error {
+func InsertNewUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, mfaType string, pageIds []string) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -74,9 +74,9 @@ func InsertNewUser(txFunc framework.LoadableTx, id string, mail string, password
 	now := time.Now()
 
 	_, err = tx.Exec(`
-INSERT INTO users (id, mail, password, salt, admin, blocked, created_at, last_login) 
-VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-`, id, mail, password, salt, admin, blocked, now, now)
+INSERT INTO users (id, mail, password, salt, admin, blocked, mfa_type, created_at, last_login) 
+VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+`, id, mail, password, salt, admin, blocked, mfaType, now, now)
 	if err != nil {
 		return err
 	}
@@ -90,7 +90,7 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 	return nil
 }
 
-func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, pageIdsToRemove []string, pageIdsToAdd []string) error {
+func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, mfaType string, pageIdsToRemove []string, pageIdsToAdd []string) error {
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -98,9 +98,9 @@ func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password st
 
 	res, err := tx.Exec(`
 UPDATE users
-SET mail = $1, password = $2, salt = $3, admin = $4, last_login = $5, blocked = $6, onboard = $7
-WHERE id = $8
-`, mail, password, salt, admin, lastLogin, blocked, onboard, id)
+SET mail = $1, password = $2, salt = $3, admin = $4, last_login = $5, blocked = $6, onboard = $7, mfa_type = $8
+WHERE id = $9
+`, mail, password, salt, admin, lastLogin, blocked, onboard, mfaType, id)
 	if err != nil {
 		return err
 	}

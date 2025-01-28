@@ -14,6 +14,7 @@ func InitTemplates() {
 	var err error
 	contactRequestTemplate, err = template.New(contactRequestTemplateName).Parse(mustReadTemplateFile(contactRequestFile))
 	onboardingCompleteTemplate, err = template.New(onboardingCompleteTemplateName).Parse(mustReadTemplateFile(onboardingCompleteFile))
+	mfaCodeTemplate, err = template.New(mfaCodeTemplateName).Parse(mustReadTemplateFile(mfaCodeFile))
 	if err != nil {
 		logs.Panic(fmt.Sprintf("Error loading contact request template: %v", err))
 	}
@@ -47,6 +48,20 @@ type OnboardingCompleteMailData struct {
 
 func ParseOnboardingCompleteTemplate(writer io.WriteCloser, data OnboardingCompleteMailData) error {
 	return onboardingCompleteTemplate.ExecuteTemplate(writer, onboardingCompleteTemplateName, data)
+}
+
+const mfaCodeFile = "mail/files/mfa-mail.html"
+const mfaCodeTemplateName = "mfa-mail"
+
+var mfaCodeTemplate *template.Template
+
+type MfaCodeMailData struct {
+	AdminMail string
+	MfaCode   string
+}
+
+func ParseMfaCodeTemplate(writer io.WriteCloser, data MfaCodeMailData) error {
+	return mfaCodeTemplate.ExecuteTemplate(writer, mfaCodeTemplateName, data)
 }
 
 func mustReadTemplateFile(path string) string {
