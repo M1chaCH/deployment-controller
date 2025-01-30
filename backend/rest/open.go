@@ -31,7 +31,9 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.PUT("/login", putUserPassword)
 	router.GET("/login/onboard/img", getOnboardingTokenImg)
 	router.POST("/login/onboard", postCompleteOnboarding)
+	router.POST("/login/mfa/mail", postSendMfaToken)
 	router.POST("/login/mfa", postMfaCheck)
+	router.PUT("/login/mfa/type", putChangeMfaType)
 	router.GET("/pages", getOverviewPages)
 	router.POST("/contact", postContact)
 }
@@ -181,7 +183,10 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	valid, err := mfa.IntialValidate(framework.GetTx(c), idToken.UserId, dto.MfaType, dto.Token)
+	tx := framework.GetTx(c)
+
+	// TODO probably gonna fail when mfa type changed because changes in DB are not commited yet...
+	valid, err := mfa.InitialValidate(tx, idToken.UserId, dto.MfaType, dto.Token)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "invalid token"})
@@ -251,6 +256,46 @@ func postCompleteOnboarding(c *gin.Context) {
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
 }
 
+func postSendMfaToken(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState != auth.LoginStateTwofactorWaiting && idToken.LoginState != auth.LoginStateOnboardingWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
+		return
+	}
+
+	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	if !found {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "user does not exist"})
+		return
+	}
+
+	if user.MfaType != mfa.TypeMail {
+		auth.RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "mfa not received via Mail"})
+		return
+	}
+
+	checkValidated := true
+	checkValidatedQuery := c.Query("onboarding")
+	if checkValidatedQuery == "false" {
+		checkValidated = false
+	}
+
+	err := mfa.SendMailTotp(framework.GetTx(c), user.Id, user.Mail, checkValidated)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to send totp for user: %s - %v", idToken.UserId, err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to send totp"})
+		return
+	}
+
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "sent"})
+	return
+}
+
 type mfaCheckDto struct {
 	Token string `json:"token"`
 }
@@ -274,6 +319,69 @@ func postMfaCheck(c *gin.Context) {
 	}
 
 	auth.HandleAndCompleteMfaVerification(c, idToken, dto.Token)
+}
+
+type changeMfaTypeDto struct {
+	UserId  string `json:"user_id"`
+	MfaType string `json:"mfa_type"`
+}
+
+func putChangeMfaType(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState == auth.LoginStateLoggedOut || idToken.LoginState == auth.LoginStateTwofactorWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "invalid state"})
+		return
+	}
+
+	var dto changeMfaTypeDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "mfa check form invalid"})
+		return
+	}
+
+	if dto.UserId != idToken.UserId && !idToken.Admin {
+		auth.RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "forbidden"})
+		return
+	}
+
+	tx := framework.GetTx(c)
+	user, found := users.LoadUserById(tx, dto.UserId)
+	if !found {
+		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user does not exist"})
+		return
+	}
+
+	if dto.MfaType != mfa.TypeMail && dto.MfaType != mfa.TypeApp {
+		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "mfa type unknown"})
+		return
+	}
+
+	if user.MfaType == dto.MfaType {
+		auth.RespondWithCookie(c, http.StatusNoContent, gin.H{"message": "mfa type the same, nothing changed"})
+		return
+	}
+
+	err := users.UpdateUser(tx, dto.UserId, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, user.LastLogin, dto.MfaType, make([]string, 0), make([]string, 0))
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to update user: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
+		return
+	}
+
+	err = mfa.HandleChangedTotpType(tx, dto.UserId, dto.MfaType)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to change totp type: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
+		return
+	}
+
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "ok"})
 }
 
 type overviewPagesDto struct {

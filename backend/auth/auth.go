@@ -101,7 +101,13 @@ func HandleAndCompleteLogin(c *gin.Context, user users.UserEntity) {
 }
 
 func HandleAndCompleteMfaVerification(c *gin.Context, idToken IdentityToken, mfaToken string) {
-	ok, err := mfa.Validate(framework.GetTx(c), idToken.UserId, idToken.MfaType, mfaToken, true)
+	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	if !found {
+		RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "unauthorized"})
+		return
+	}
+
+	ok, err := mfa.Validate(framework.GetTx(c), idToken.UserId, user.MfaType, mfaToken, true)
 	if err != nil {
 		if err.Error() == framework.ErrNotValidated {
 			logs.Severe(fmt.Sprintf("failed to validate token - user is not onboard - this must be a bug, this case should not happen: %v", err))

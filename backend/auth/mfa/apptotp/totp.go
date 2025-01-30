@@ -42,8 +42,13 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 	return insertNewTotp(loadableTx, entity)
 }
 
-func LoadTotpForUser(loadableTx framework.LoadableTx, userId string) (totpEntity, error) {
-	return selectTotp(loadableTx, userId)
+func LoadTotpImage(loadableTx framework.LoadableTx, userId string) ([]byte, error) {
+	res, err := selectTotp(loadableTx, userId)
+	if err != nil {
+		return nil, err
+	}
+
+	return res.Image, nil
 }
 
 func InitiallyValidateTotp(loadableTx framework.LoadableTx, userId string, code string) (bool, error) {

@@ -89,11 +89,49 @@ func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, 
 }
 
 func InitiallyValidateTotp(loadableTx framework.LoadableTx, userId string, code string) (bool, error) {
+	codeValid, err := ValidateTotp(loadableTx, userId, code, false)
+	if err != nil || !codeValid {
+		return codeValid, err
+	}
 
+	err = markTotpAsValid(loadableTx, userId)
+	return codeValid, err
 }
 
 func ValidateTotp(loadableTx framework.LoadableTx, userId string, code string, checkValidated bool) (bool, error) {
+	entity, err := selectMailTotp(loadableTx, userId)
+	if err != nil {
+		return false, err
+	}
 
+	if entity.Tries+1 > 5 {
+		return false, errors.New("totp expired")
+	}
+
+	if checkValidated && !entity.Validated {
+		return false, errors.New(framework.ErrNotValidated)
+	}
+
+	valid := totp.Validate(code, entity.Secret)
+
+	if valid {
+		err = updateCurrentToken(loadableTx, userId, code, 0)
+	} else {
+		err = updateCurrentToken(loadableTx, userId, code, entity.Tries+1)
+	}
+
+	return valid, err
+}
+
+func RemoveTotpForUser(loadableTx framework.LoadableTx, userId string) error {
+	tx, err := loadableTx()
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec("DELETE FROM user_mail_totp WHERE user_id = $1", userId)
+
+	return err
 }
 
 func selectMailTotp(loadableTx framework.LoadableTx, userId string) (totpEntity, error) {
@@ -142,6 +180,15 @@ UPDATE public.user_mail_totp SET last_code = $1, tries = $2 where user_id = $3
 	return err
 }
 
-func removeMailOtp() {
+func markTotpAsValid(txLoader framework.LoadableTx, userId string) error {
+	tx, err := txLoader()
+	if err != nil {
+		return err
+	}
 
+	_, err = tx.Exec(`
+UPDATE user_mail_totp SET validated = true, validated_at = $1 WHERE user_id = $2
+`, time.Now(), userId)
+
+	return err
 }
