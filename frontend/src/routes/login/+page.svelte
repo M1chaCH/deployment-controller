@@ -111,6 +111,7 @@
                         <input id="password" type="password" bind:value={password}/>
                     </div>
                 {:else}
+                    <!-- TODO resend email-->
                     <TokenInput on:input={e => token = e.detail.value}/>
                     <p class="subtext" style="margin-top: 12px;">New Device, TwoFactor authentication required.</p>
                 {/if}

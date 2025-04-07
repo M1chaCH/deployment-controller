@@ -4,6 +4,7 @@ import (
 	"errors"
 	"github.com/M1chaCH/deployment-controller/auth/mfa/apptotp"
 	"github.com/M1chaCH/deployment-controller/auth/mfa/mailtotp"
+	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 )
 
@@ -12,12 +13,17 @@ const TypeMail = "mfa-mailtotp"
 const ErrMfaTypeUnknown = "unknown MFA type"
 
 func Prepare(loadableTx framework.LoadableTx, userId string, mfaType string) error {
+	user, found := users.LoadUserById(loadableTx, userId)
+	if !found {
+		return errors.New("unknown user")
+	}
+
 	if mfaType == TypeApp {
-		err := apptotp.PrepareTotp(loadableTx, userId, mfaType)
+		err := apptotp.PrepareTotp(loadableTx, userId, user.Mail)
 		return err
 	}
 	if mfaType == TypeMail {
-		err := mailtotp.PrepareTotp(loadableTx, userId, mfaType)
+		err := mailtotp.PrepareTotp(loadableTx, userId, user.Mail)
 		return err
 	}
 

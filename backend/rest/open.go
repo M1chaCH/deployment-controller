@@ -322,8 +322,8 @@ func postMfaCheck(c *gin.Context) {
 }
 
 type changeMfaTypeDto struct {
-	UserId  string `json:"user_id"`
-	MfaType string `json:"mfa_type"`
+	UserId  string `json:"userId"`
+	MfaType string `json:"mfaType"`
 }
 
 func putChangeMfaType(c *gin.Context) {

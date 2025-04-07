@@ -86,6 +86,15 @@ func HandleAndCompleteLogin(c *gin.Context, user users.UserEntity) {
 		loginState = LoginStateOnboardingWaiting
 	} else if !device.Validated {
 		loginState = LoginStateTwofactorWaiting
+
+		if user.MfaType == mfa.TypeMail {
+			err = mfa.SendMailTotp(framework.GetTx(c), user.Id, user.Mail, true)
+			if err != nil {
+				logs.Warn(fmt.Sprintf("failed to send mail to user (%v) (for MFA)", err))
+				AbortWithCooke(c, http.StatusInternalServerError, "login failed - could not send mfa mail")
+				return
+			}
+		}
 	}
 
 	// 4. generate success token

@@ -15,7 +15,7 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      config.JWT.Domain,
-		AccountName: "michu-tech - " + userEmail,
+		AccountName: userEmail,
 	})
 	if err != nil {
 		return err

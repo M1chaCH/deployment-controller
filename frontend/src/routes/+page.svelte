@@ -4,6 +4,8 @@
     import AppCard from '$lib/components/AppCard.svelte';
     import FetchFailed from '$lib/components/FetchFailed.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
+
+    // TODO implement change MFA type
 </script>
 
 <PageOutline pageName="Home">

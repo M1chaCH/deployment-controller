@@ -16,7 +16,7 @@ type totpEntity struct {
 	Secret      string        `db:"secret"`
 	AccountName string        `db:"account_name"`
 	Tries       int           `db:"tries"`
-	LastCode    sql.NullInt16 `db:"last_code"`
+	LastCode    sql.NullInt32 `db:"last_code"`
 	Validated   bool          `db:"validated"`
 	ValidatedAt sql.NullTime  `db:"validated_at"`
 	CreatedAt   time.Time     `db:"created_at"`
@@ -43,7 +43,7 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      config.JWT.Domain,
-		AccountName: "michu-tech - " + userEmail,
+		AccountName: userEmail,
 		Period:      5 * 60,
 	})
 	if err != nil {
@@ -112,12 +112,13 @@ func ValidateTotp(loadableTx framework.LoadableTx, userId string, code string, c
 		return false, errors.New(framework.ErrNotValidated)
 	}
 
+	// TODO somehow this does not work, token is not valid after 30 Seconds --> probably need to use ValidateCustom and set periode
 	valid := totp.Validate(code, entity.Secret)
 
 	if valid {
 		err = updateCurrentToken(loadableTx, userId, code, 0)
 	} else {
-		err = updateCurrentToken(loadableTx, userId, code, entity.Tries+1)
+		err = updateCurrentToken(loadableTx, userId, code, entity.Tries+1) // TODO request fails --> transaction rolled back --> tries not saved ...
 	}
 
 	return valid, err
