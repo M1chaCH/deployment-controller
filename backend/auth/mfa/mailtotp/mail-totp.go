@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/mail"
+	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"io"
 	"time"
@@ -69,7 +70,12 @@ func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, 
 		return errors.New("token has never been validated")
 	}
 
-	code, err := totp.GenerateCode(token.Secret, time.Now().UTC())
+	code, err := totp.GenerateCodeCustom(token.Secret, time.Now().UTC(), totp.ValidateOpts{
+		Period:    5 * 60,
+		Skew:      1,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	})
 	if err != nil {
 		return err
 	}
@@ -112,8 +118,12 @@ func ValidateTotp(loadableTx framework.LoadableTx, userId string, code string, c
 		return false, errors.New(framework.ErrNotValidated)
 	}
 
-	// TODO somehow this does not work, token is not valid after 30 Seconds --> probably need to use ValidateCustom and set periode
-	valid := totp.Validate(code, entity.Secret)
+	valid, err := totp.ValidateCustom(code, entity.Secret, time.Now().UTC(), totp.ValidateOpts{
+		Period:    5 * 60,
+		Skew:      1,
+		Digits:    otp.DigitsSix,
+		Algorithm: otp.AlgorithmSHA1,
+	})
 
 	if valid {
 		err = updateCurrentToken(loadableTx, userId, code, 0)

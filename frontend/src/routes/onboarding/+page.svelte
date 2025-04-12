@@ -21,6 +21,12 @@
     let sendMfaMailFailed = false;
     let sendingMail = false;
 
+    userStore.subscribe(usr => {
+        if(usr && !isErrorDto(usr)) {
+            mfaType = usr.mfaType
+        }
+    })
+
     onMount(() => {
         userStore.subscribe(user => {
             if(!isErrorDto(user)) {
@@ -118,11 +124,11 @@
                     <div class="carbon-radio-group">
                         <label>Choose MFA Type</label>
                         <div>
-                            <input type="radio" id="mfa-type-app" name="mfa-type" value="mfa-apptotp" on:change={(e) => changeMfaType(e.target.value)} checked/>
+                            <input type="radio" id="mfa-type-app" name="mfa-type" value="mfa-apptotp" on:change={(e) => changeMfaType(e.target.value)} checked={mfaType === 'mfa-apptotp'}/>
                             <label for="mfa-type-app">Authenticator App</label>
                         </div>
                         <div>
-                            <input type="radio" id="mfa-type-mail" name="mfa-type" value="mfa-mailtotp" on:change={(e) => changeMfaType(e.target.value)}/>
+                            <input type="radio" id="mfa-type-mail" name="mfa-type" value="mfa-mailtotp" on:change={(e) => changeMfaType(e.target.value)} checked={mfaType === 'mfa-mailtotp'}/>
                             <label for="mfa-type-mail">E-Mail</label>
                         </div>
                     </div>

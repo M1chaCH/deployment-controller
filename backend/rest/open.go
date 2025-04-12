@@ -36,6 +36,7 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.PUT("/login/mfa/type", putChangeMfaType)
 	router.GET("/pages", getOverviewPages)
 	router.POST("/contact", postContact)
+	router.POST("/logout", postLogout)
 }
 
 var digitRegex = regexp.MustCompile(`\d`)
@@ -98,6 +99,7 @@ func getCurrentUser(c *gin.Context) {
 		"mail":       user.Mail,
 		"admin":      user.Admin,
 		"onboard":    user.Onboard,
+		"mfaType":    user.MfaType,
 		"loginState": idToken.LoginState,
 	}
 	auth.RespondWithCookie(c, http.StatusOK, body)
@@ -545,4 +547,19 @@ func postContact(c *gin.Context) {
 	}
 
 	auth.RespondWithCookie(c, http.StatusAccepted, gin.H{"message": "sent mail"})
+}
+
+func postLogout(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusNoContent, gin.H{})
+		return
+	}
+
+	idToken.LoginState = auth.LoginStateLoggedOut
+	idToken.UserId = ""
+	idToken.Mail = ""
+
+	auth.SetCurrentIdentityToken(c, idToken)
+	auth.RespondWithCookie(c, http.StatusNoContent, gin.H{})
 }

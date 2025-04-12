@@ -79,7 +79,7 @@
 
 {#if $userStore && !isErrorDto($userStore)}
     {#if userPopoverOpen}
-        <UserPopover user={$userStore} on:close={() => userPopoverOpen = false} on:changePassword={() => { userPopoverOpen = false; changePasswordOpen = true; }}/>
+        <UserPopover user={$userStore} on:close={() => userPopoverOpen = false} on:changePassword={() => { userPopoverOpen = false; changePasswordOpen = true; }} />
     {/if}
 
     {#if changePasswordOpen}

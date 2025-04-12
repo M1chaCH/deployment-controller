@@ -100,7 +100,7 @@
     </div>
     <div slot="content" class="page" id="login">
         <div class="content-card">
-            <form class="login-inputs">
+            <form class="login-inputs" on:submit|preventDefault={login}>
                 {#if !mfa}
                     <div class="carbon-input">
                         <label for="mail">E-Mail</label>

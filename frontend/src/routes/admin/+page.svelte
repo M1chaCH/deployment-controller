@@ -56,6 +56,7 @@
             userId: create ? uuidv4() : user!.userId,
             mail: create ? "" : user!.mail,
             password: "",
+            mfaType: create ? 'mfa-apptotp' : user!.mfaType,
             admin: create ? false : user!.admin,
             blocked: create ? false : user!.blocked,
             onboard: create ? false : user!.onboard,
@@ -63,9 +64,9 @@
             removePages: [],
             existingPages: create ? new Map<string, { access: boolean; name: string; }>()
                                   : new Map<string, { access: boolean; name: string; }>(user!.pageAccess
-                                                                                             .filter(p => p.pagePrivate)
+                                                                                             .filter(p => p.privatePage)
                                                                                              .map(p => [p.pageId, {
-                                                                                                 access: p.accessAllowed,
+                                                                                                 access: p.hasAccess,
                                                                                                  name: p.technicalName,
                                                                                              }])),
         }
@@ -212,17 +213,17 @@
                             <p><i>User was created at: {moment(user.createdAt).format("DD.MM.yyyy HH:mm:ss")}</i></p>
                             <div style="height: 1px; width: 75%; background-color: var(--controller-line-color); margin: 1rem 0;"></div>
                             {#each user.pageAccess.sort((a, b) => {
-                                if(a.pagePrivate && !b.pagePrivate) return -1
-                                if(!a.pagePrivate && b.pagePrivate) return 1
+                                if(a.privatePage && !b.privatePage) return -1
+                                if(!a.privatePage && b.privatePage) return 1
                                 return 0
                             }) as page}
                                 <p>
                                     <span class="subtext">
                                         {page.technicalName}
-                                        {#if page.pagePrivate}
+                                        {#if page.privatePage}
                                             <i>(Private)</i>
                                         {/if}:
-                                    </span>{page.accessAllowed ? 'Access granted' : 'Access denied'}
+                                    </span>{page.hasAccess ? 'Access granted' : 'Access denied'}
                                 </p>
                             {/each}
                             <div style="height: 1px; width: 75%; background-color: var(--controller-line-color); margin: 1rem 0;"></div>
@@ -336,9 +337,16 @@
                         <input id="userPassword" type="text" bind:value={userToEdit.password}>
                     </div>
                 {/if}
-                <div class="carbon-checkbox">
-                    <input id="userAdmin" type="checkbox" bind:checked={userToEdit.admin}>
-                    <label for="userAdmin">Admin</label>
+                <div class="carbon-radio-group">
+                    <label>Choose MFA Type</label>
+                    <div>
+                        <input type="radio" id="mfa-type-app" name="mfa-type" value="mfa-apptotp" on:change={(e) => userToEdit.mfaType = e.target.value} checked={userToEdit.mfaType === 'mfa-apptotp'}/>
+                        <label for="mfa-type-app">Authenticator App</label>
+                    </div>
+                    <div>
+                        <input type="radio" id="mfa-type-mail" name="mfa-type" value="mfa-mailtotp" on:change={(e) => userToEdit.mfaType = e.target.value} checked={userToEdit.mfaType === 'mfa-mailtotp'}/>
+                        <label for="mfa-type-mail">E-Mail</label>
+                    </div>
                 </div>
                 {#if userToEdit.onboard}
                     <div class="carbon-checkbox">
@@ -346,6 +354,10 @@
                         <label for="userOnboard">Onboard</label>
                     </div>
                 {/if}
+                <div class="carbon-checkbox">
+                    <input id="userAdmin" type="checkbox" bind:checked={userToEdit.admin}>
+                    <label for="userAdmin">Admin</label>
+                </div>
                 <div class="carbon-checkbox">
                     <input id="userBlocked" type="checkbox" bind:checked={userToEdit.blocked}>
                     <label for="userBlocked">Blocked</label>

@@ -28,7 +28,7 @@ func authRequest(c *gin.Context) {
 		userId = pageaccess.AnonymousUserId
 	}
 
-	userPageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), pageaccess.AnonymousUserId)
+	userPageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), userId)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("Failed to load user page access for user '%s': %v", token.UserId, err))
 		RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "access denied"})

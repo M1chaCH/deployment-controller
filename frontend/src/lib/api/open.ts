@@ -16,6 +16,7 @@ export interface UserInfoDto {
   mail: string,
   admin: boolean,
   onboard: boolean,
+  mfaType: MfaType,
   loginState: LoginState,
 }
 

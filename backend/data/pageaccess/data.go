@@ -13,19 +13,22 @@ func InitCache() {
 
 	tx, err := framework.DB().Beginx()
 
+	if err != nil {
+		logs.Panic(fmt.Sprintf("failed to begin transaction during pageaccess cache initialisation: %v", err))
+	}
+
 	var pageAccessResult []userPageAccessResult
 	err = tx.Select(&pageAccessResult, `
-SELECT p.id as page_id, up.user_id, p.technical_name, p.private_page,
+select p.id as page_id, u.id as user_id, p.technical_name, p.private_page,
        CASE
            WHEN (up.user_id IS NOT NULL AND u.onboard AND NOT u.blocked)
                OR p.private_page IS NOT TRUE
                THEN TRUE
            ELSE FALSE
            END AS has_access
-FROM pages AS p
-         LEFT JOIN user_page up ON p.id = up.page_id
-         LEFT JOIN users u ON up.user_id = u.id
-WHERE u.Id IS NOT NULL
+from users as u
+    left join public.user_page up on u.id = up.user_id
+    full join pages as p on true
 `)
 	if err != nil {
 		logs.Panic(fmt.Sprintf("failed to initialize pageaccess cache: %v", err))

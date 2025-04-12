@@ -22,6 +22,7 @@ var emailRegex = regexp.MustCompile(emailPattern)
 type AdminUserDto struct {
 	UserId     string                      `json:"userId"`
 	Mail       string                      `json:"mail"`
+	MfaType    string                      `json:"mfaType"`
 	Admin      bool                        `json:"admin"`
 	Blocked    bool                        `json:"blocked"`
 	Onboard    bool                        `json:"onboard"`
@@ -94,6 +95,7 @@ func getUsers(c *gin.Context) {
 		dtos[i] = AdminUserDto{
 			UserId:     user.Id,
 			Mail:       user.Mail,
+			MfaType:    user.MfaType,
 			Admin:      user.Admin,
 			Blocked:    user.Blocked,
 			Onboard:    user.Onboard,
@@ -201,7 +203,8 @@ func putUser(c *gin.Context) {
 		return
 	}
 
-	if currentUser.Onboard && !dto.Onboard {
+	if (currentUser.Onboard && !dto.Onboard) || currentUser.MfaType != dto.MfaType {
+		dto.Onboard = false // if MFA Type changes, user must onboard again
 		err := mfa.ClearTokenOfUser(framework.GetTx(c), dto.UserId)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))

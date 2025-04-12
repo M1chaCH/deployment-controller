@@ -48,3 +48,10 @@ export async function postMfaValidation(mfaToken: string): Promise<boolean> {
 
   return response.ok;
 }
+
+export async function postLogout(): Promise<void> {
+  await fetch(`${PUBLIC_BACKEND_URL}/open/logout`, {
+    method: 'POST',
+    credentials: 'include'
+  });
+}
