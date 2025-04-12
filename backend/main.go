@@ -4,8 +4,7 @@ import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
 	"github.com/M1chaCH/deployment-controller/data/clients"
-	"github.com/M1chaCH/deployment-controller/data/pages"
-	"github.com/M1chaCH/deployment-controller/data/users"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/M1chaCH/deployment-controller/location"
@@ -105,8 +104,7 @@ func initCaches() {
 	mail.InitTemplates()
 	location.InitCache()
 	clients.InitCache()
-	users.InitCache()
-	pages.InitCache()
+	pageaccess.InitCache()
 }
 
 func initRoutes(router *gin.Engine) {

@@ -2,14 +2,15 @@ drop table if exists users cascade;
 create table users
 (
     id uuid primary key,
-    mail varchar(255) not null unique ,
+    mail varchar(255) not null unique,
     password varchar(255) not null,
     salt bytea not null,
     admin boolean not null default false,
     created_at timestamptz not null default current_timestamp,
     last_login timestamptz not null default current_timestamp,
     blocked boolean not null default false,
-    onboard boolean not null default false
+    onboard boolean not null default false,
+    mfa_type varchar(255) not null
 );
 
 drop table if exists pages cascade;
@@ -90,5 +91,19 @@ create table user_totp
     validated   boolean not null default false,
     created_at timestamptz not null default current_timestamp,
     validated_at timestamptz null,
+    foreign key (user_id) references users(id) on delete cascade
+);
+
+drop table if exists user_mail_totp cascade;
+create table user_mail_totp
+(
+    user_id      uuid primary key,
+    secret      varchar(255) not null unique,
+    account_name varchar(255) not null unique,
+    tries int2 not null default 0,
+    last_code varchar(255) null,
+    validated   boolean not null default false,
+    validated_at timestamptz null,
+    created_at timestamptz not null default current_timestamp,
     foreign key (user_id) references users(id) on delete cascade
 );

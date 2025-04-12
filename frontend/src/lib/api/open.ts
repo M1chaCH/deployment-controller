@@ -16,6 +16,7 @@ export interface UserInfoDto {
   mail: string,
   admin: boolean,
   onboard: boolean,
+  mfaType: MfaType,
   loginState: LoginState,
 }
 
@@ -32,6 +33,14 @@ export interface ChangePasswordDto {
   oldPassword?: string;
   newPassword: string;
   token?: string;
+  mfaType?: MfaType;
+}
+
+export type MfaType = "mfa-apptotp" | "mfa-mailtotp";
+
+export interface ChangeMfaTypeDto {
+  userId: string;
+  mfaType: MfaType;
 }
 
 export function isErrorDto(obj: object | null | undefined): obj is ApiErrorDto {
@@ -83,6 +92,43 @@ export async function putChangePassword(dto: ChangePasswordDto, onboarding: bool
     headers: {
       'Content-Type': 'application/json'
     },
+  })
+  const data = await response.json()
+  if(response.ok) {
+    return data;
+  } else {
+    return {
+      message: data?.message ?? response.statusText,
+      status: response.status,
+      statusText: response.statusText,
+    }
+  }
+}
+
+export async function putChangeMfaType(dto: ChangeMfaTypeDto): Promise<ApiErrorDto | void> {
+  const response = await fetch(`${PUBLIC_BACKEND_URL}/open/login/mfa/type`, {
+    credentials: 'include',
+    method: 'PUT',
+    body: JSON.stringify(dto),
+    headers: {
+      'Content-Type': 'application/json'
+    },
+  })
+  if(!response.ok) {
+    const data = await response.json()
+    return {
+      message: data?.message ?? response.statusText,
+      status: response.status,
+      statusText: response.statusText,
+    }
+  }
+}
+
+export async function postSendMfaMail(onboarding: boolean = false): Promise<ApiErrorDto | ApiSuccessDto> {
+  const urlSuffix = `/open/login/mfa/mail?onboarding=${onboarding}`;
+  const response = await fetch(`${PUBLIC_BACKEND_URL}${urlSuffix}`, {
+    credentials: 'include',
+    method: 'POST',
   })
   const data = await response.json()
   if(response.ok) {

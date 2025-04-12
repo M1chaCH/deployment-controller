@@ -6,33 +6,19 @@ import (
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"time"
 )
 
 // AuthenticationMiddleware is called for every request
 // makes sure that the request has a valid cookie with a clientId, doesn't do any authorisation specific validations
 // after this Middleware context.Get(updatedIdJwtContextKey) can be used as the source of truth regarding *authentication*
 //
-// flow:
-//  1. check if cookie is here
-//     no -> add new one to request
-//     add new ID Token to context
-//  2. check if has new IP or Agent
-//     yes -> check if combination of IP and Agent are known
-//     -- no -> add new agent and ip
-//     -- & if new agent store new agent in context (so login knows if agent was known before this request)
-//  3. check if cookie expired or in future
-//     yes -> create new, keep client & user id, but logout
-//  4. check if agent changed to unknown agent and logged in
-//     yes -> logout
-//  5. check if logged in and user blocked
-//     yes -> logout
+// Docs: https://lucid.app/lucidspark/72ac4259-9ff9-4927-972f-d3c4758ab0a6/edit?beaconFlowId=6B32CEF8DD9B4049&page=0_0#
 func AuthenticationMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		requestIp := parseIp(c)
 		requestAgent := c.Request.UserAgent()
 
-		// 1. check if cookie is here
+		// 1. check if valid token is available
 		requestToken, ok := getIdentityToken(c, idJwtContextKey)
 		if !ok || requestToken.Issuer == "" {
 			newIdToken, err := processNewClient(uuid.NewString(), requestIp, requestAgent)
@@ -47,10 +33,11 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// 2. check if issuer exists
 		client, found, err := clients.LoadClientInfo(requestToken.Issuer)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("client from cookie was not found due to internal error!, %v", err))
-			AbortWithCooke(c, 404, "some required data was not found")
+			AbortWithCooke(c, 500, "failed to process request")
 			return
 		}
 		if !found {
@@ -67,91 +54,72 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		// 2. check if has new IP or Agent
-		if requestAgent != requestToken.OriginAgent || requestIp != requestToken.OriginIp {
-			if client.IsDeviceKnown(requestIp, requestAgent) {
-				token := createIdentityToken(requestToken.Issuer,
-					requestToken.UserId,
-					requestToken.Mail,
-					requestToken.Admin,
-					requestToken.LoginState,
-					requestIp,
-					requestAgent)
-
-				c.Set(updatedIdJwtContextKey, token)
-				logs.Info(fmt.Sprintf("client changed to other known device: client:%s agent:%s ip:%s", requestToken.Issuer, requestAgent, requestIp))
+		// 3. Apply Authentication Rules depending on login State
+		newDeviceIsKnown := client.IsDeviceKnown(requestIp, requestAgent)
+		switch requestToken.LoginState {
+		case LoginStateTwofactorWaiting:
+			// LoginStateTwofactorWaiting: Nothing can change
+			if didDeviceChange(requestIp, requestAgent, requestToken) {
+				if !newDeviceIsKnown {
+					requestToken.LoginState = LoginStateLoggedOut
+					addDeviceAndComplete(c, requestToken, requestIp, requestAgent)
+				} else {
+					requestToken.LoginState = LoginStateLoggedOut
+					complete(c, requestToken, requestIp, requestAgent)
+				}
 			} else {
-				_, err := clients.AddDeviceToClient(requestToken.Issuer, requestIp, requestAgent)
-				if err != nil {
-					logs.Warn(fmt.Sprintf("failed to add device to client, %v", err))
-					AbortWithCooke(c, 500, "failed to process request")
-					return
-				}
-
-				// token is updated later
-
-				if requestAgent != requestToken.OriginAgent {
-					c.Set(addedAgentContextKey, requestAgent)
-				}
-				logs.Info(fmt.Sprintf("client changed to new device: client:%s agent:%s ip:%s", requestToken.Issuer, requestAgent, requestIp))
+				complete(c, requestToken, requestIp, requestAgent)
 			}
-		}
+			return
+		case LoginStateLoggedIn, LoginStateOnboardingWaiting:
+			// normal logged in state: Agent can't change
+			if requestToken.OriginAgent != requestAgent {
+				requestToken.LoginState = LoginStateLoggedOut
+			}
 
-		// 3. check if cookie expired or in future
-		expiredAt, err := requestToken.GetExpirationTime()
-		issuedAt, err := requestToken.GetIssuedAt()
-		now := time.Now()
-		if err != nil || expiredAt.Before(now) || issuedAt.After(now) {
-			token := createIdentityToken(requestToken.Issuer,
-				requestToken.UserId,
-				requestToken.Mail,
-				false,
-				LoginStateLoggedOut,
-				requestIp,
-				requestAgent)
+			if newDeviceIsKnown {
+				complete(c, requestToken, requestIp, requestAgent)
+			} else {
+				addDeviceAndComplete(c, requestToken, requestIp, requestAgent)
+			}
+			return
+		default:
+		case LoginStateLoggedOut:
+			// logged out: just keep track of the device
+			if newDeviceIsKnown {
+				complete(c, requestToken, requestIp, requestAgent)
+			} else {
+				addDeviceAndComplete(c, requestToken, requestIp, requestAgent)
+			}
 
-			c.Set(updatedIdJwtContextKey, token)
-			c.Next()
 			return
 		}
 
-		// 4. check if agent changed and logged in
-		// 5. check if logged in and user blocked
-		user, userExists := GetCurrentUser(c)
-		// fixme -> sometimes agent changed when not actually changed (on chrome mobile guy)
-		if requestToken.LoginState != LoginStateLoggedOut && (requestAgent != requestToken.OriginAgent || !userExists || user.Blocked) {
-			token := createIdentityToken(requestToken.Issuer,
-				requestToken.UserId,
-				requestToken.Mail,
-				requestToken.Admin,
-				LoginStateLoggedOut,
-				requestIp,
-				requestAgent)
-
-			c.Set(updatedIdJwtContextKey, token)
-			c.Next()
-			logs.Warn(fmt.Sprintf("changed login state of client due to agent change or blocked: client:%s agent:%s ip:%s", requestToken.Issuer, requestAgent, requestIp))
-			return
-		}
-
-		// while waiting for two factor, ip can't change
-		if requestIp != requestToken.OriginIp && requestToken.LoginState == LoginStateTwofactorWaiting {
-			token := createIdentityToken(requestToken.Issuer,
-				requestToken.UserId,
-				requestToken.Mail,
-				requestToken.Admin,
-				LoginStateLoggedOut,
-				requestIp,
-				requestAgent)
-
-			c.Set(updatedIdJwtContextKey, token)
-			c.Next()
-			logs.Info(fmt.Sprintf("ip changed while waiting for MFA: client:%s agent:%s ip:%s", requestToken.Issuer, requestAgent, requestIp))
-			return
-		}
-
-		c.Next()
+		logs.Severe(fmt.Sprintf("login state could not be handled properly for client: %v (this line should not be reachable) -- failing", client.Id))
+		AbortWithCooke(c, 500, "failed to process request")
 	}
+}
+
+func didDeviceChange(requestIp, requestAgent string, token IdentityToken) bool {
+	return requestIp != token.OriginIp || requestAgent != token.OriginAgent
+}
+
+func addDeviceAndComplete(c *gin.Context, token IdentityToken, requestIp, requestAgent string) {
+	_, err := clients.AddDeviceToClient(token.Issuer, requestIp, requestAgent)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to add device to client, %v", err))
+		AbortWithCooke(c, 500, "failed to process request")
+		return
+	}
+
+	logs.Info(fmt.Sprintf("client changed to other known device: client:%s agent:%s ip:%s", token.Issuer, requestAgent, requestIp))
+	complete(c, token, requestIp, requestAgent)
+}
+
+func complete(c *gin.Context, token IdentityToken, requestIp, requestAgent string) {
+	token = createIdentityToken(token.Issuer, token.UserId, token.Mail, token.Admin, token.LoginState, requestIp, requestAgent)
+	c.Set(updatedIdJwtContextKey, token)
+	c.Next()
 }
 
 func parseIp(c *gin.Context) string {

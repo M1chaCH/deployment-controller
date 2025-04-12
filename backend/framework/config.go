@@ -40,6 +40,7 @@ type AppConfig struct {
 			User     string `yaml:"user"`
 			Password string `yaml:"password"`
 		}
+		MaxMessageLength int `yaml:"max_message_length"`
 	}
 	Location struct {
 		Host                 string `yaml:"host"`

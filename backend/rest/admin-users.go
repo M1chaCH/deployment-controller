@@ -3,7 +3,9 @@ package rest
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
@@ -18,22 +20,16 @@ const emailPattern = `^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$`
 var emailRegex = regexp.MustCompile(emailPattern)
 
 type AdminUserDto struct {
-	UserId     string           `json:"userId"`
-	Mail       string           `json:"mail"`
-	Admin      bool             `json:"admin"`
-	Blocked    bool             `json:"blocked"`
-	Onboard    bool             `json:"onboard"`
-	CreatedAt  time.Time        `json:"createdAt"`
-	LastLogin  time.Time        `json:"lastLogin"`
-	PageAccess []PageAccessDto  `json:"pageAccess"`
-	Devices    []UserDevicesDto `json:"devices"`
-}
-
-type PageAccessDto struct {
-	PageId        string `json:"pageId"`
-	TechnicalName string `json:"technicalName"`
-	AccessAllowed bool   `json:"accessAllowed"`
-	PagePrivate   bool   `json:"pagePrivate"`
+	UserId     string                      `json:"userId"`
+	Mail       string                      `json:"mail"`
+	MfaType    string                      `json:"mfaType"`
+	Admin      bool                        `json:"admin"`
+	Blocked    bool                        `json:"blocked"`
+	Onboard    bool                        `json:"onboard"`
+	CreatedAt  time.Time                   `json:"createdAt"`
+	LastLogin  time.Time                   `json:"lastLogin"`
+	PageAccess []pageaccess.PageAccessPage `json:"pageAccess"`
+	Devices    []UserDevicesDto            `json:"devices"`
 }
 
 type UserDevicesDto struct {
@@ -71,14 +67,11 @@ func getUsers(c *gin.Context) {
 	// don't want so send salt and password
 	dtos := make([]AdminUserDto, len(result))
 	for i, user := range result {
-		pageAccess := make([]PageAccessDto, 0)
-		for _, page := range user.Pages {
-			pageAccess = append(pageAccess, PageAccessDto{
-				PageId:        page.PageId,
-				TechnicalName: page.TechnicalName,
-				AccessAllowed: page.AccessAllowed,
-				PagePrivate:   page.Private,
-			})
+		pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), user.Id)
+		if err != nil {
+			logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load users"})
+			return
 		}
 
 		devices := make([]UserDevicesDto, 0)
@@ -102,12 +95,13 @@ func getUsers(c *gin.Context) {
 		dtos[i] = AdminUserDto{
 			UserId:     user.Id,
 			Mail:       user.Mail,
+			MfaType:    user.MfaType,
 			Admin:      user.Admin,
 			Blocked:    user.Blocked,
 			Onboard:    user.Onboard,
 			CreatedAt:  user.CreatedAt,
 			LastLogin:  user.LastLogin,
-			PageAccess: pageAccess,
+			PageAccess: pageAccess.Pages,
 			Devices:    devices,
 		}
 	}
@@ -122,6 +116,7 @@ type editUserDto struct {
 	Admin       bool     `json:"admin"`
 	Blocked     bool     `json:"blocked"`
 	Onboard     bool     `json:"onboard,omitempty"`
+	MfaType     string   `json:"mfaType"`
 	AddPages    []string `json:"addPages,omitempty"`
 	RemovePages []string `json:"removePages,omitempty"`
 }
@@ -151,14 +146,14 @@ func postUser(c *gin.Context) {
 		return
 	}
 
-	_, err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.AddPages)
+	err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.MfaType, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not insert new user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
 		return
 	}
 
-	_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+	err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not prepare token for new user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
@@ -208,15 +203,16 @@ func putUser(c *gin.Context) {
 		return
 	}
 
-	if currentUser.Onboard && !dto.Onboard {
-		err := auth.RemoveTokenForUser(framework.GetTx(c), dto.UserId)
+	if (currentUser.Onboard && !dto.Onboard) || currentUser.MfaType != dto.MfaType {
+		dto.Onboard = false // if MFA Type changes, user must onboard again
+		err := mfa.ClearTokenOfUser(framework.GetTx(c), dto.UserId)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to remove token for user"})
 			return
 		}
 
-		_, err = auth.PrepareToken(framework.GetTx(c), dto.UserId, dto.Mail)
+		err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
 		if err != nil {
 			logs.Warn(fmt.Sprintf("failed to prepare token for user: %v -> %v", dto.UserId, err))
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to prepare token for user"})
@@ -224,13 +220,14 @@ func putUser(c *gin.Context) {
 		}
 	}
 
-	_, err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.RemovePages, dto.AddPages)
+	err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.MfaType, dto.RemovePages, dto.AddPages)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("could not update user: %v -> %v", dto.Mail, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to update user"})
 		return
 	}
 
+	pageaccess.DeleteUserPageAccessCache(dto.UserId)
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "user updated"})
 }
 

@@ -4,7 +4,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
+	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
+	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
@@ -22,8 +24,12 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.PUT("/login", putUserPassword)
 	router.GET("/login/onboard/img", getOnboardingTokenImg)
 	router.POST("/login/onboard", postCompleteOnboarding)
+	router.POST("/login/mfa/mail", postSendMfaToken)
+	router.POST("/login/mfa", postMfaCheck)
+	router.PUT("/login/mfa/type", putChangeMfaType)
 	router.GET("/pages", getOverviewPages)
 	router.POST("/contact", postContact)
+	router.POST("/logout", postLogout)
 }
 
 var digitRegex = regexp.MustCompile(`\d`)
@@ -33,29 +39,16 @@ var largeLetterRegex = regexp.MustCompile(`[A-Z]`)
 type loginDto struct {
 	Mail     string `json:"mail" binding:"required"`
 	Password string `json:"password" binding:"required"`
-	Token    string `json:"token"`
 }
 
 func postLogin(c *gin.Context) {
-	idToken, ok := auth.GetCurrentIdentityToken(c)
-	if !ok {
-		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "missing user info"})
-		return
-	}
-
-	// TODO, do we really want this? this will let a user through even if his password is incorrect.
-	if idToken.LoginState == auth.LoginStateLoggedIn || idToken.LoginState == auth.LoginStateOnboardingWaiting {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": auth.LoginStateLoggedIn})
-		return
-	}
-
 	var dto loginDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
 
-	if dto.Mail == "" || dto.Password == "" || (idToken.LoginState == auth.LoginStateTwofactorWaiting && len(dto.Token) < 6) {
+	if dto.Mail == "" || dto.Password == "" {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "login form invalid"})
 		return
 	}
@@ -78,10 +71,7 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	state := auth.HandleLoginWithValidCredentials(c, user, dto.Token)
-	if state != auth.LoginStateLoggedOut {
-		auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": state})
-	}
+	auth.HandleAndCompleteLogin(c, user)
 }
 
 func getCurrentUser(c *gin.Context) {
@@ -102,6 +92,7 @@ func getCurrentUser(c *gin.Context) {
 		"mail":       user.Mail,
 		"admin":      user.Admin,
 		"onboard":    user.Onboard,
+		"mfaType":    user.MfaType,
 		"loginState": idToken.LoginState,
 	}
 	auth.RespondWithCookie(c, http.StatusOK, body)
@@ -112,6 +103,7 @@ type changePasswordDto struct {
 	OldPassword string `json:"oldPassword"`
 	NewPassword string `json:"newPassword" binding:"required"`
 	Token       string `json:"token"`
+	MfaType     string `json:"mfaType"`
 }
 
 func putUserPassword(c *gin.Context) {
@@ -135,45 +127,40 @@ func putUserPassword(c *gin.Context) {
 }
 
 func getOnboardingTokenImg(c *gin.Context) {
-	totpEntity, ok := handleGetOnboardingToken(c)
+	image, ok := handleGetOnboardingToken(c)
 	if !ok {
 		return
 	}
 
 	auth.AppendJwtToken(c)
 	c.Header("Content-Type", "image/png")
-	_, err := c.Writer.Write(totpEntity.Image)
+	_, err := c.Writer.Write(image)
 	if err != nil {
 		auth.AbortWithCooke(c, http.StatusInternalServerError, "failed to write image")
 		return
 	}
 }
 
-func handleGetOnboardingToken(c *gin.Context) (auth.MfaTokenEntity, bool) {
+func handleGetOnboardingToken(c *gin.Context) ([]byte, bool) {
 	idToken, ok := auth.GetCurrentIdentityToken(c)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
 	if idToken.LoginState != auth.LoginStateOnboardingWaiting {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
-	totpEntity, err := auth.LoadTotpForUser(framework.GetTx(c), idToken.UserId)
+	image, err := mfa.GetQrImage(framework.GetTx(c), idToken.UserId)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to load totp for user: %s - %v", idToken.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load token"})
-		return auth.MfaTokenEntity{}, false
+		return nil, false
 	}
 
-	if totpEntity.Validated {
-		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "already validated, you should be onboard"})
-		return auth.MfaTokenEntity{}, false
-	}
-
-	return totpEntity, true
+	return image, true
 }
 
 func postCompleteOnboarding(c *gin.Context) {
@@ -190,7 +177,9 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	valid, err := auth.InitiallyValidateToken(framework.GetTx(c), idToken.UserId, dto.Token)
+	tx := framework.GetTx(c)
+
+	valid, err := mfa.InitialValidate(tx, idToken.UserId, dto.MfaType, dto.Token)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "invalid token"})
@@ -227,15 +216,23 @@ func postCompleteOnboarding(c *gin.Context) {
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
+
+	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), idToken.UserId)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
+		return
+	}
+
 	pagesString := ""
-	for i, page := range user.Pages {
+	for i, page := range pageAccess.Pages {
 		if !page.GetAccessAllowed() {
 			continue
 		}
 
-		pagesString += page.Url
+		pagesString += page.TechnicalName
 
-		if i != len(user.Pages)-1 {
+		if i != len(pageAccess.Pages)-1 {
 			pagesString += ", "
 		}
 	}
@@ -252,6 +249,134 @@ func postCompleteOnboarding(c *gin.Context) {
 	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "onboarding complete!"})
 }
 
+func postSendMfaToken(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState != auth.LoginStateTwofactorWaiting && idToken.LoginState != auth.LoginStateOnboardingWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
+		return
+	}
+
+	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	if !found {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "user does not exist"})
+		return
+	}
+
+	if user.MfaType != mfa.TypeMail {
+		auth.RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "mfa not received via Mail"})
+		return
+	}
+
+	checkValidated := true
+	checkValidatedQuery := c.Query("onboarding")
+	if checkValidatedQuery == "false" {
+		checkValidated = false
+	}
+
+	err := mfa.SendMailTotp(framework.GetTx(c), user.Id, user.Mail, checkValidated)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to send totp for user: %s - %v", idToken.UserId, err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to send totp"})
+		return
+	}
+
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "sent"})
+	return
+}
+
+type mfaCheckDto struct {
+	Token string `json:"token"`
+}
+
+func postMfaCheck(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState != auth.LoginStateTwofactorWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "invalid state"})
+		return
+	}
+
+	var dto mfaCheckDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "mfa check form invalid"})
+		return
+	}
+
+	auth.HandleAndCompleteMfaVerification(c, idToken, dto.Token)
+}
+
+type changeMfaTypeDto struct {
+	UserId  string `json:"userId"`
+	MfaType string `json:"mfaType"`
+}
+
+func putChangeMfaType(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
+		return
+	}
+
+	if idToken.LoginState == auth.LoginStateLoggedOut || idToken.LoginState == auth.LoginStateTwofactorWaiting {
+		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "invalid state"})
+		return
+	}
+
+	var dto changeMfaTypeDto
+	if err := c.ShouldBindJSON(&dto); err != nil {
+		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "mfa check form invalid"})
+		return
+	}
+
+	if dto.UserId != idToken.UserId && !idToken.Admin {
+		auth.RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "forbidden"})
+		return
+	}
+
+	tx := framework.GetTx(c)
+	user, found := users.LoadUserById(tx, dto.UserId)
+	if !found {
+		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user does not exist"})
+		return
+	}
+
+	if dto.MfaType != mfa.TypeMail && dto.MfaType != mfa.TypeApp {
+		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "mfa type unknown"})
+		return
+	}
+
+	if user.MfaType == dto.MfaType {
+		auth.RespondWithCookie(c, http.StatusNoContent, gin.H{"message": "mfa type the same, nothing changed"})
+		return
+	}
+
+	err := users.UpdateUser(tx, dto.UserId, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, user.LastLogin, dto.MfaType, make([]string, 0), make([]string, 0))
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to update user: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
+		return
+	}
+
+	err = mfa.HandleChangedTotpType(tx, dto.UserId, dto.MfaType)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to change totp type: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
+		return
+	}
+
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "ok"})
+}
+
 type overviewPagesDto struct {
 	PageTitle       string `json:"pageTitle" binding:"required"`
 	PageDescription string `json:"pageDescription" binding:"required"`
@@ -263,37 +388,42 @@ type overviewPagesDto struct {
 func getOverviewPages(c *gin.Context) {
 	user, found := auth.GetCurrentUser(c)
 
-	result := make([]overviewPagesDto, len(user.Pages))
-	if found {
-		for i, page := range user.Pages {
-			result[i] = overviewPagesDto{
-				PageTitle:       page.Title,
-				PageDescription: page.Description,
-				PageUrl:         page.Url,
-				PrivatePage:     page.Private,
-				AccessAllowed:   page.AccessAllowed,
+	userId := user.Id
+	if !found {
+		userId = pageaccess.AnonymousUserId
+	}
+
+	pageEntities, err := pages.LoadPages(framework.GetTx(c))
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load pages: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load pages"})
+		return
+	}
+
+	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), userId)
+	if err != nil {
+		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load page access"})
+		return
+	}
+
+	result := make([]overviewPagesDto, len(pageEntities))
+	for i, p := range pageEntities {
+		hasAccess := !p.PrivatePage
+
+		for _, pa := range pageAccess.Pages {
+			if pa.PageId == p.Id {
+				hasAccess = pa.Access
+				break
 			}
 		}
 
-		auth.RespondWithCookie(c, http.StatusOK, result)
-		return
-	}
-
-	allPages, err := pages.LoadPages(framework.GetTx(c))
-	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load all pages for overview: %v", err))
-		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not load pages"})
-		return
-	}
-
-	result = make([]overviewPagesDto, len(allPages))
-	for i, page := range allPages {
 		result[i] = overviewPagesDto{
-			PageTitle:       page.Title,
-			PageDescription: page.Description,
-			PageUrl:         page.Url,
-			PrivatePage:     page.PrivatePage,
-			AccessAllowed:   !page.PrivatePage,
+			PageTitle:       p.Title,
+			PageDescription: p.Description,
+			PageUrl:         p.Url,
+			PrivatePage:     p.PrivatePage,
+			AccessAllowed:   hasAccess,
 		}
 	}
 
@@ -342,12 +472,14 @@ func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.I
 		return false
 	}
 
-	_, err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, make([]string, 0), make([]string, 0))
+	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, user.MfaType, make([]string, 0), make([]string, 0))
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to save new password for user: %s -> %v", dto.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not save changes to user!"})
 		return false
 	}
+
+	pageaccess.DeleteUserPageAccessCache(user.Id)
 
 	return true
 }
@@ -371,7 +503,7 @@ func postContact(c *gin.Context) {
 		return
 	}
 
-	if len(dto.Message) > 1000 {
+	if len(dto.Message) > framework.Config().Mail.MaxMessageLength {
 		auth.RespondWithCookie(c, http.StatusRequestEntityTooLarge, gin.H{"message": "message too long"})
 		return
 	}
@@ -382,6 +514,7 @@ func postContact(c *gin.Context) {
 		deviceId = "not found: " + err.Error()
 	}
 
+	// todo cleanup this api, create the function in the mail package, not as the param
 	err = mail.SendMailToAdmin(idToken.Issuer, "michu-tech Contact request", func(writer io.WriteCloser) error {
 		return mail.ParseContactRequestTemplate(writer, mail.ContactRequestMailData{
 			ClientId: idToken.Issuer,
@@ -404,4 +537,19 @@ func postContact(c *gin.Context) {
 	}
 
 	auth.RespondWithCookie(c, http.StatusAccepted, gin.H{"message": "sent mail"})
+}
+
+func postLogout(c *gin.Context) {
+	idToken, ok := auth.GetCurrentIdentityToken(c)
+	if !ok {
+		auth.RespondWithCookie(c, http.StatusNoContent, gin.H{})
+		return
+	}
+
+	idToken.LoginState = auth.LoginStateLoggedOut
+	idToken.UserId = ""
+	idToken.Mail = ""
+
+	auth.SetCurrentIdentityToken(c, idToken)
+	auth.RespondWithCookie(c, http.StatusNoContent, gin.H{})
 }

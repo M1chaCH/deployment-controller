@@ -210,7 +210,9 @@
         gap: 2rem;
 
         box-sizing: border-box;
-        margin: 2rem;
+        padding: 2rem;
+        margin: auto;
+        max-width: 1200px;
     }
 
     #contact form {

@@ -2,7 +2,7 @@
 
     import {goto} from '$app/navigation';
     import {PUBLIC_BACKEND_URL} from '$env/static/public';
-    import {isErrorDto, putChangePassword} from '$lib/api/open.js';
+    import {isErrorDto, type MfaType, postSendMfaMail, putChangeMfaType, putChangePassword} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
     import MiniNotification from '$lib/components/MiniNotification.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
@@ -10,11 +10,22 @@
     import {onMount} from 'svelte';
 
     let mail: string = "";
-    let oldPassword: string;
-    let password: string;
+    let oldPassword = "";
+    let password = "";
+    let showNewPassword = false;
     let token = "";
+    let mfaType: MfaType = "mfa-apptotp";
     $: invalid = !mail || !oldPassword || !password || oldPassword === password || !token || token.length < 6;
     let onboardingFailed = false;
+    let mfaTypeChangeFailed = false;
+    let sendMfaMailFailed = false;
+    let sendingMail = false;
+
+    userStore.subscribe(usr => {
+        if(usr && !isErrorDto(usr)) {
+            mfaType = usr.mfaType
+        }
+    })
 
     onMount(() => {
         userStore.subscribe(user => {
@@ -36,6 +47,7 @@
                                                        newPassword: password,
                                                        oldPassword,
                                                        token,
+                                                       mfaType,
                                                    }, true)
 
             if(isErrorDto(result)) {
@@ -46,6 +58,34 @@
                 return
             }
         }
+    }
+
+    async function changeMfaType(type: MfaType) {
+        mfaTypeChangeFailed = false;
+        const oldType = mfaType;
+        mfaType = null;
+        const response = await putChangeMfaType({
+                             mfaType: type,
+                             userId: $userStore!.userId,
+                         });
+
+        if(response && isErrorDto(response)) {
+            mfaTypeChangeFailed = true;
+            mfaType = oldType;
+        } else {
+            mfaType = type;
+        }
+    }
+
+    async function sendMfaMail() {
+        sendingMail = true;
+        sendMfaMailFailed = false;
+
+        const response = await postSendMfaMail()
+        if(isErrorDto(response)) {
+            sendMfaMailFailed = true;
+        }
+        sendingMail = false;
     }
 </script>
 
@@ -73,13 +113,45 @@
                     </div>
                     <div class="carbon-input">
                         <label for="password">Password</label>
-                        <input id="password" type="password" bind:value={password} autocomplete="new-password"/>
+                        <input id="password" type={showNewPassword ? 'text' : 'password'} value={password} on:input={(e) => password = e.target.value} autocomplete="new-password"/>
+                        <button class="icon-button option" on:click={() => showNewPassword = !showNewPassword}>
+                            <span class="material-symbols-outlined">{showNewPassword ? 'visibility_off' : 'visibility'}</span>
+                        </button>
                     </div>
                 </div>
                 <div class="onboarding-form-side">
                     <h4>Create Token</h4>
-                    <img src={PUBLIC_BACKEND_URL + "/open/login/onboard/img"} alt="onboarding token"/>
-                    <p>Please scan this QR-Code with a two factor authenticator app. Every time you login with a new device you will have to use this code to login.</p>
+                    <div class="carbon-radio-group">
+                        <label>Choose MFA Type</label>
+                        <div>
+                            <input type="radio" id="mfa-type-app" name="mfa-type" value="mfa-apptotp" on:change={(e) => changeMfaType(e.target.value)} checked={mfaType === 'mfa-apptotp'}/>
+                            <label for="mfa-type-app">Authenticator App</label>
+                        </div>
+                        <div>
+                            <input type="radio" id="mfa-type-mail" name="mfa-type" value="mfa-mailtotp" on:change={(e) => changeMfaType(e.target.value)} checked={mfaType === 'mfa-mailtotp'}/>
+                            <label for="mfa-type-mail">E-Mail</label>
+                        </div>
+                    </div>
+
+                    {#if mfaType === 'mfa-apptotp'}
+                        <img src={PUBLIC_BACKEND_URL + "/open/login/onboard/img"} alt="onboarding token"/>
+                        <p>Please scan this QR-Code with a two factor authenticator app. Every time you login with a new device you will have to use this code to login.</p>
+                    {:else if mfaType === 'mfa-mailtotp'}
+                        <div class="content">
+                            <button style="margin: 0 auto;" class="carbon-button primary" on:click={() => sendMfaMail()} disabled={sendingMail}>Send E-Mail</button>
+                            {#if sendMfaMailFailed}
+                                <MiniNotification message="Failed to send MFA Token via mail." on:close={() => sendMfaMailFailed = false} />
+                            {/if}
+                        </div>
+                        <p>Every time you log in with a new device, we will send you a code to your E-Mail. This code is required for the login.</p>
+                    {:else if mfaTypeChangeFailed !== true }
+                        <p>Loading...</p>
+                    {/if}
+
+                    {#if mfaTypeChangeFailed === true}
+                        <MiniNotification message="Failed to change MFA Type, please try again later." on:close={() => mfaTypeChangeFailed = false} />
+                    {/if}
+
                     <TokenInput on:input={(e) => token = e.detail.value}/>
                 </div>
             </form>

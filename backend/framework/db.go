@@ -10,6 +10,9 @@ import (
 	"time"
 )
 
+const ErrTooManyTokens = "too many tokens found per user"
+const ErrNotValidated = "token is not validated"
+
 type LoadableTx func() (*sqlx.Tx, error)
 
 // GetTx lazy loads the transaction for the request.

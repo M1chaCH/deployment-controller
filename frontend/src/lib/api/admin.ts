@@ -1,5 +1,5 @@
 import {PUBLIC_BACKEND_URL} from '$env/static/public';
-import type {ApiErrorDto, ApiSuccessDto} from '$lib/api/open';
+import type {ApiErrorDto, ApiSuccessDto, MfaType} from '$lib/api/open';
 
 export interface AdminPageDto {
   id: string;
@@ -18,6 +18,7 @@ export interface AdminUserDto {
   onboard: boolean
   createdAt: string
   lastLogin: string
+  mfaType: MfaType
   pageAccess: AdminPageAccessDto[]
   devices: AdminUserDeviceDto[]
 }
@@ -25,8 +26,8 @@ export interface AdminUserDto {
 export interface AdminPageAccessDto {
   pageId: string
   technicalName: string
-  accessAllowed: boolean
-  pagePrivate: boolean
+  hasAccess: boolean
+  privatePage: boolean
 }
 
 export interface AdminUserDeviceDto {
@@ -45,6 +46,7 @@ export interface AdminEditUserDto {
   userId: string;
   mail: string;
   password: string;
+  mfaType: MfaType;
   admin: boolean;
   blocked: boolean;
   onboard: boolean;
