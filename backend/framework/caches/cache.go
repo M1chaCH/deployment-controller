@@ -2,7 +2,6 @@ package caches
 
 import "time"
 
-// TODO cleanup, only cache really relevant data (stuff that is used by AuthenticationMiddleware & auth-request.go) (ensuring the cache is always up to date is a pain in the ass)
 type CachedItem interface {
 	GetCacheKey() string
 }

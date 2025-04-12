@@ -24,6 +24,7 @@ mail:
     port: 22
     user: user
     password: password
+  max_message_length: 1000
 cors:
   origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
 location:

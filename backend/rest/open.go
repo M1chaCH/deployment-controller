@@ -18,13 +18,6 @@ import (
 	"regexp"
 )
 
-/*
-TODO
-- new login process (login -> onboarding / MFA | NOT login -> login + MFA)
-- during onboarding you should be able to select a MFA method
-- a lot of testing
-*/
-
 func InitOpenEndpoints(router gin.IRouter) {
 	router.GET("/login", getCurrentUser)
 	router.POST("/login", postLogin)
@@ -170,7 +163,6 @@ func handleGetOnboardingToken(c *gin.Context) ([]byte, bool) {
 	return image, true
 }
 
-// TODO cleanup? (at least update for new multiple MFA stuff)
 func postCompleteOnboarding(c *gin.Context) {
 	idToken, ok := auth.GetCurrentIdentityToken(c)
 	if !ok {
@@ -187,7 +179,6 @@ func postCompleteOnboarding(c *gin.Context) {
 
 	tx := framework.GetTx(c)
 
-	// TODO probably gonna fail when mfa type changed because changes in DB are not commited yet...
 	valid, err := mfa.InitialValidate(tx, idToken.UserId, dto.MfaType, dto.Token)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
@@ -512,8 +503,7 @@ func postContact(c *gin.Context) {
 		return
 	}
 
-	// TODO make configurable
-	if len(dto.Message) > 1000 {
+	if len(dto.Message) > framework.Config().Mail.MaxMessageLength {
 		auth.RespondWithCookie(c, http.StatusRequestEntityTooLarge, gin.H{"message": "message too long"})
 		return
 	}

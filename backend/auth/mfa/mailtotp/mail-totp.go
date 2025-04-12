@@ -12,6 +12,8 @@ import (
 	"time"
 )
 
+const totpPeriodeSeconds = 5 * 60
+
 type totpEntity struct {
 	UserId      string        `db:"user_id"`
 	Secret      string        `db:"secret"`
@@ -24,7 +26,6 @@ type totpEntity struct {
 }
 
 /*
-TODO
 current idea:
 Does not matter if user MFAs with app or email, both must take the same steps.
 1. Prepare
@@ -45,7 +46,7 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 	key, err := totp.Generate(totp.GenerateOpts{
 		Issuer:      config.JWT.Domain,
 		AccountName: userEmail,
-		Period:      5 * 60,
+		Period:      totpPeriodeSeconds,
 	})
 	if err != nil {
 		return err
@@ -71,7 +72,7 @@ func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, 
 	}
 
 	code, err := totp.GenerateCodeCustom(token.Secret, time.Now().UTC(), totp.ValidateOpts{
-		Period:    5 * 60,
+		Period:    totpPeriodeSeconds,
 		Skew:      1,
 		Digits:    otp.DigitsSix,
 		Algorithm: otp.AlgorithmSHA1,
@@ -80,7 +81,7 @@ func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, 
 		return err
 	}
 
-	err = updateCurrentToken(loadableTx, userId, code, 0)
+	err = updateCurrentToken(userId, code, 0)
 	if err != nil {
 		return err
 	}
@@ -119,16 +120,16 @@ func ValidateTotp(loadableTx framework.LoadableTx, userId string, code string, c
 	}
 
 	valid, err := totp.ValidateCustom(code, entity.Secret, time.Now().UTC(), totp.ValidateOpts{
-		Period:    5 * 60,
+		Period:    totpPeriodeSeconds,
 		Skew:      1,
 		Digits:    otp.DigitsSix,
 		Algorithm: otp.AlgorithmSHA1,
 	})
 
 	if valid {
-		err = updateCurrentToken(loadableTx, userId, code, 0)
+		err = updateCurrentToken(userId, code, 0)
 	} else {
-		err = updateCurrentToken(loadableTx, userId, code, entity.Tries+1) // TODO request fails --> transaction rolled back --> tries not saved ...
+		err = updateCurrentToken(userId, code, entity.Tries+1)
 	}
 
 	return valid, err
@@ -179,13 +180,10 @@ VALUES (:user_id, :secret, :account_name)
 	return err
 }
 
-func updateCurrentToken(loadableTx framework.LoadableTx, userId string, code string, tries int) error {
-	tx, err := loadableTx()
-	if err != nil {
-		return err
-	}
+func updateCurrentToken(userId string, code string, tries int) error {
+	db := framework.DB()
 
-	_, err = tx.Exec(`
+	_, err := db.Exec(`
 UPDATE public.user_mail_totp SET last_code = $1, tries = $2 where user_id = $3
 `, code, tries, userId)
 	return err

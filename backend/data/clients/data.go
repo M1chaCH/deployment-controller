@@ -32,7 +32,6 @@ Scenarios
 - if user logs in, add clientId to userId
 
 3. Client X logs in with User X, logs out, logs in with User Y and Client Y
-- TODO!?!
 - add agent to user Y and update client id in cookie.
 */
 
