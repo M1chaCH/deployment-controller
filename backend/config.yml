@@ -20,17 +20,20 @@ mail:
   max_count: 5
   count_duration: 10
   smtp:
-    host: relay
-    port: 22
-    user: user
-    password: password
+    host:
+    port:
+    user:
+    password:
   max_message_length: 1000
 cors:
   origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
+totp:
+  totp_lifetime: 30 # seconds
+  slow_totp_lifetime: 300 # seconds
 location:
-  host: host
-  account: someuser
-  license: plspassword
+  host:
+  account:
+  license:
   cache_expire_hours: 48
   check_wait_time_minutes: 10
-  local_ip: 1.1.1.1
+  local_ip:

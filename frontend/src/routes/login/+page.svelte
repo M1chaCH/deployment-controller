@@ -107,6 +107,13 @@
         }
         sendingMail = false;
     }
+
+    function handleInputKeydown(e: KeyboardEvent) {
+        if(e.key === "Enter") {
+            e.preventDefault();
+            login();
+        }
+    }
 </script>
 
 <svelte:head>
@@ -128,7 +135,7 @@
                     </div>
                     <div class="carbon-input">
                         <label for="password">Password</label>
-                        <input id="password" type="password" bind:value={password}/>
+                        <input id="password" type="password" bind:value={password} on:keydown={handleInputKeydown}/>
                     </div>
                 {:else}
                     <button style="margin: 8px;" class="carbon-button primary" on:click={() => sendMfaMail()} disabled={sendingMail}>Send E-Mail again</button>

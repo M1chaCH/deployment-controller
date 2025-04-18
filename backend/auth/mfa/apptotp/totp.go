@@ -34,6 +34,7 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 	entity := totpEntity{
 		UserId:      userId,
 		Secret:      key.Secret(),
+		Url:         key.URL(),
 		AccountName: key.AccountName(),
 		Image:       buf.Bytes(),
 		Validated:   false,
@@ -42,13 +43,13 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 	return insertNewTotp(loadableTx, entity)
 }
 
-func LoadTotpImage(loadableTx framework.LoadableTx, userId string) ([]byte, error) {
+func LoadTotpImageAndUrl(loadableTx framework.LoadableTx, userId string) ([]byte, string, error) {
 	res, err := selectTotp(loadableTx, userId)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 
-	return res.Image, nil
+	return res.Image, res.Url, nil
 }
 
 func InitiallyValidateTotp(loadableTx framework.LoadableTx, userId string, code string) (bool, error) {
@@ -91,6 +92,7 @@ type totpEntity struct {
 	Secret      string       `db:"secret"`
 	AccountName string       `db:"account_name"`
 	Image       []byte       `db:"image"`
+	Url         string       `db:"url"`
 	Validated   bool         `db:"validated"`
 	CreatedAt   time.Time    `db:"created_at"`
 	ValidatedAt sql.NullTime `db:"validated_at"`
@@ -123,8 +125,8 @@ func insertNewTotp(txLoader framework.LoadableTx, entity totpEntity) error {
 	}
 
 	_, err = tx.NamedExec(`
-INSERT INTO public.user_totp (user_id, secret, account_name, image, validated)
-VALUES (:user_id, :secret, :account_name, :image, false)
+INSERT INTO public.user_totp (user_id, secret, account_name, image, url, validated)
+VALUES (:user_id, :secret, :account_name, :image, :url, false)
 `, entity)
 
 	return err

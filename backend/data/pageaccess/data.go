@@ -3,6 +3,7 @@ package pageaccess
 import (
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/caches"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 )
 
@@ -115,7 +116,14 @@ FROM pages AS p
 		Pages:  pageAccessResult,
 	}
 
-	cache.StoreSafeBackground(userPageAccess)
+	err = cache.Store(userPageAccess)
+	if err != nil {
+		if err.Error() == caches.ErrCacheNotInitialized {
+			InitCache()
+		} else {
+			return UserPageAccess{}, err
+		}
+	}
 	return userPageAccess, nil
 }
 

@@ -23,6 +23,7 @@ func InitOpenEndpoints(router gin.IRouter) {
 	router.POST("/login", postLogin)
 	router.PUT("/login", putUserPassword)
 	router.GET("/login/onboard/img", getOnboardingTokenImg)
+	router.GET("/login/onboard/url", getOnboardingTokenUrl)
 	router.POST("/login/onboard", postCompleteOnboarding)
 	router.POST("/login/mfa/mail", postSendMfaToken)
 	router.POST("/login/mfa", postMfaCheck)
@@ -127,7 +128,7 @@ func putUserPassword(c *gin.Context) {
 }
 
 func getOnboardingTokenImg(c *gin.Context) {
-	image, ok := handleGetOnboardingToken(c)
+	image, _, ok := handleGetOnboardingToken(c)
 	if !ok {
 		return
 	}
@@ -141,26 +142,36 @@ func getOnboardingTokenImg(c *gin.Context) {
 	}
 }
 
-func handleGetOnboardingToken(c *gin.Context) ([]byte, bool) {
+func getOnboardingTokenUrl(c *gin.Context) {
+	_, url, ok := handleGetOnboardingToken(c)
+	if !ok {
+		return
+	}
+
+	auth.AppendJwtToken(c)
+	auth.RespondWithCookie(c, http.StatusOK, gin.H{"url": url})
+}
+
+func handleGetOnboardingToken(c *gin.Context) ([]byte, string, bool) {
 	idToken, ok := auth.GetCurrentIdentityToken(c)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "request unauthorized"})
-		return nil, false
+		return nil, "", false
 	}
 
-	if idToken.LoginState != auth.LoginStateOnboardingWaiting {
+	if idToken.LoginState != auth.LoginStateOnboardingWaiting && idToken.LoginState != auth.LoginStateLoggedIn {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "not correct timing"})
-		return nil, false
+		return nil, "", false
 	}
 
-	image, err := mfa.GetQrImage(framework.GetTx(c), idToken.UserId)
+	image, url, err := mfa.GetQrImageAndUrl(framework.GetTx(c), idToken.UserId)
 	if err != nil {
 		logs.Warn(fmt.Sprintf("failed to load totp for user: %s - %v", idToken.UserId, err))
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load token"})
-		return nil, false
+		return nil, "", false
 	}
 
-	return image, true
+	return image, url, true
 }
 
 func postCompleteOnboarding(c *gin.Context) {
@@ -386,10 +397,11 @@ type overviewPagesDto struct {
 }
 
 func getOverviewPages(c *gin.Context) {
-	user, found := auth.GetCurrentUser(c)
+	user, userFound := auth.GetCurrentUser(c)
+	token, tokenFound := auth.GetCurrentIdentityToken(c)
 
 	userId := user.Id
-	if !found {
+	if !userFound || !tokenFound || token.LoginState != auth.LoginStateLoggedIn {
 		userId = pageaccess.AnonymousUserId
 	}
 
@@ -431,7 +443,7 @@ func getOverviewPages(c *gin.Context) {
 }
 
 func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.IdentityToken, onboarding bool) bool {
-	if onboarding && idToken.LoginState != auth.LoginStateOnboardingWaiting {
+	if onboarding && idToken.LoginState != auth.LoginStateOnboardingWaiting && idToken.LoginState != auth.LoginStateLoggedIn {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "onboarding failed, not logged in / already onboard?"})
 		return false
 	}

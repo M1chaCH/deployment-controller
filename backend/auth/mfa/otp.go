@@ -58,8 +58,8 @@ func ClearTokenOfUser(loadableTx framework.LoadableTx, userId string) error {
 	return err
 }
 
-func GetQrImage(loadableTx framework.LoadableTx, userId string) ([]byte, error) {
-	return apptotp.LoadTotpImage(loadableTx, userId)
+func GetQrImageAndUrl(loadableTx framework.LoadableTx, userId string) ([]byte, string, error) {
+	return apptotp.LoadTotpImageAndUrl(loadableTx, userId)
 }
 
 func HandleChangedTotpType(loadableTx framework.LoadableTx, userId string, newType string) error {

@@ -141,3 +141,13 @@ export async function postSendMfaMail(onboarding: boolean = false): Promise<ApiE
     }
   }
 }
+
+
+
+export async function getAppTotpUrl(): Promise<string> {
+  const response =await fetch(`${PUBLIC_BACKEND_URL}/open/login/onboard/url`, {
+    credentials: 'include'
+  })
+  .then(res => res.json() as Promise<{url: string}>);
+  return response.url;
+}

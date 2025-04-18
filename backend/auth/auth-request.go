@@ -21,10 +21,12 @@ func authRequest(c *gin.Context) {
 		return
 	}
 
-	token, found := GetCurrentIdentityToken(c)
+	token, tokenFound := GetCurrentIdentityToken(c)
 
-	userId := token.UserId
-	if !found || userId == "" {
+	var userId string
+	if tokenFound && token.UserId != "" && token.LoginState == LoginStateLoggedIn {
+		userId = token.UserId
+	} else {
 		userId = pageaccess.AnonymousUserId
 	}
 

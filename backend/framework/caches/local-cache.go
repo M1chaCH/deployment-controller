@@ -8,6 +8,8 @@ import (
 	"time"
 )
 
+const ErrCacheNotInitialized = "cache not initialized"
+
 type localCachedItem[T CachedItem] struct {
 	Item     T
 	CachedAt time.Time
@@ -74,7 +76,7 @@ func (c *localItemsCache[T]) GetAll(result chan T) {
 
 func (c *localItemsCache[T]) GetAllAsArray() ([]T, error) {
 	if !c.IsInitialized() {
-		return nil, errors.New("cache not initialized")
+		return nil, errors.New(ErrCacheNotInitialized)
 	}
 
 	result := make([]T, 0, len(c.cache))
@@ -89,7 +91,7 @@ func (c *localItemsCache[T]) GetAllAsArray() ([]T, error) {
 
 func (c *localItemsCache[T]) Store(entity T) error {
 	if !c.IsInitialized() {
-		return errors.New("cache not initialized")
+		return errors.New(ErrCacheNotInitialized)
 	}
 
 	c.cache[entity.GetCacheKey()] = localCachedItem[T]{
@@ -110,7 +112,7 @@ func (c *localItemsCache[T]) StoreSafeBackground(entity T) {
 
 func (c *localItemsCache[T]) Remove(id string) error {
 	if !c.IsInitialized() {
-		return errors.New("cache not initialized")
+		return errors.New(ErrCacheNotInitialized)
 	}
 	delete(c.cache, id)
 	return nil

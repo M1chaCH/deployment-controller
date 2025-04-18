@@ -2,7 +2,7 @@
 
     import {goto} from '$app/navigation';
     import {PUBLIC_BACKEND_URL} from '$env/static/public';
-    import {isErrorDto, type MfaType, postSendMfaMail, putChangeMfaType, putChangePassword} from '$lib/api/open.js';
+    import {getAppTotpUrl, isErrorDto, type MfaType, postSendMfaMail, putChangeMfaType, putChangePassword} from '$lib/api/open.js';
     import {userStore} from '$lib/api/store';
     import MiniNotification from '$lib/components/MiniNotification.svelte';
     import PageOutline from '$lib/components/PageOutline.svelte';
@@ -14,12 +14,13 @@
     let password = "";
     let showNewPassword = false;
     let token = "";
-    let mfaType: MfaType = "mfa-apptotp";
+    let mfaType: MfaType | null = "mfa-apptotp";
     $: invalid = !mail || !oldPassword || !password || oldPassword === password || !token || token.length < 6;
     let onboardingFailed = false;
     let mfaTypeChangeFailed = false;
     let sendMfaMailFailed = false;
     let sendingMail = false;
+    let totpAppOnboardingUrl = "";
 
     userStore.subscribe(usr => {
         if(usr && !isErrorDto(usr)) {
@@ -34,6 +35,10 @@
 
                 if(user?.onboard) {
                     goto("/");
+                }
+
+                if(user?.mfaType === "mfa-apptotp") {
+                    getAppTotpUrl().then(url => totpAppOnboardingUrl = url);
                 }
             }
         })
@@ -74,6 +79,10 @@
             mfaType = oldType;
         } else {
             mfaType = type;
+
+            if(type === "mfa-apptotp") {
+                totpAppOnboardingUrl = await getAppTotpUrl();
+            }
         }
     }
 
@@ -135,7 +144,8 @@
 
                     {#if mfaType === 'mfa-apptotp'}
                         <img src={PUBLIC_BACKEND_URL + "/open/login/onboard/img"} alt="onboarding token"/>
-                        <p>Please scan this QR-Code with a two factor authenticator app. Every time you login with a new device you will have to use this code to login.</p>
+                        <p style="margin: 0.8rem 0;">Please scan this QR-Code with a two factor authenticator app. Every time you login with a new device you will have to use this code to login.</p>
+                        <a style="display: block; margin: 0.8rem 0; text-decoration: underline;" href={totpAppOnboardingUrl} target="_blank">Or register the token via this URL.</a>
                     {:else if mfaType === 'mfa-mailtotp'}
                         <div class="content">
                             <button style="margin: 0 auto;" class="carbon-button primary" on:click={() => sendMfaMail()} disabled={sendingMail}>Send E-Mail</button>
