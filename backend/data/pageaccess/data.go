@@ -1,21 +1,20 @@
 package pageaccess
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/caches"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 )
 
 func InitCache() {
-	logs.Info("initializing pageaccess cache")
+	logs.Info(nil, "initializing pageaccess cache")
 
 	initialCacheEntries := make([]UserPageAccess, 0)
 
 	tx, err := framework.DB().Beginx()
 
 	if err != nil {
-		logs.Panic(fmt.Sprintf("failed to begin transaction during pageaccess cache initialisation: %v", err))
+		logs.Panic(nil, "failed to begin transaction during pageaccess cache initialisation: %v", err)
 	}
 
 	var pageAccessResult []userPageAccessResult
@@ -32,7 +31,7 @@ from users as u
     full join pages as p on true
 `)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("failed to initialize pageaccess cache: %v", err))
+		logs.Panic(nil, "failed to initialize pageaccess cache: %v", err)
 	}
 
 	userPageAccess := map[string][]PageAccessPage{}
@@ -57,7 +56,7 @@ from users as u
 			Pages:  value,
 		})
 		if err != nil {
-			logs.Panic(fmt.Sprintf("failed to cache pageaccess: %v", err))
+			logs.Panic(nil, "failed to cache pageaccess: %v", err)
 		}
 	}
 
@@ -68,7 +67,7 @@ SELECT p.id as page_id, p.technical_name, NOT p.private_page as has_access
 FROM pages p
 `)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("failed to initialize anon pageaccess cache: %v", err))
+		logs.Panic(nil, "failed to initialize anon pageaccess cache: %v", err)
 	}
 
 	initialCacheEntries = append(initialCacheEntries, UserPageAccess{
@@ -78,9 +77,9 @@ FROM pages p
 
 	err = cache.Initialize(initialCacheEntries)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("failed to initialize pageaccess cache: %v", err))
+		logs.Panic(nil, "failed to initialize pageaccess cache: %v", err)
 	}
-	logs.Info("successfully initialized pageaccess cache")
+	logs.Info(nil, "successfully initialized pageaccess cache")
 }
 
 func LoadUserPageAccess(txFunc framework.LoadableTx, userId string) (UserPageAccess, error) {
@@ -130,7 +129,7 @@ FROM pages AS p
 func DeleteUserPageAccessCache(userId string) {
 	err := cache.Remove(userId)
 	if err != nil {
-		logs.Warn("failed to delete user page access cache entry")
+		logs.Warn(nil, "failed to delete user page access cache entry: %v", err)
 	}
 }
 

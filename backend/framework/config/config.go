@@ -1,4 +1,4 @@
-package framework
+package config
 
 import (
 	"fmt"
@@ -51,6 +51,17 @@ type AppConfig struct {
 		CacheExpireHours     int    `yaml:"cache_expire_hours" env:"LOCATION_CACHE_EXPIRE_HOURS"`
 		CheckWaitTimeMinutes int    `yaml:"check_wait_time_minutes" env:"LOCATION_CHECK_WAIT_TIME_MINUTES"`
 		LocalIp              string `yaml:"local_ip" env:"LOCATION_LOCAL_IP"`
+	}
+	APM struct {
+		ServiceName string `yaml:"service_name" env:"ELASTIC_APM_SERVICE_NAME"`
+		SecretToken string `yaml:"secret_token" env:"ELASTIC_APM_SECRET_TOKEN"`
+		ServerUrl   string `yaml:"server_url" env:"ELASTIC_APM_SERVER_URL"`
+		ApiKey      string `yaml:"api_key" env:"ELASTIC_APM_API_KEY"`
+		Environment string `yaml:"environment" env:"ELASTIC_APM_ENVIRONMENT"`
+	}
+	Log struct {
+		Level    int    `yaml:"level" env:"LOG_LEVEL"`
+		FileName string `yaml:"file_name" env:"LOG_FILE_NAME"`
 	}
 }
 

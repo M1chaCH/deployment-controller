@@ -1,0 +1,26 @@
+filebeat.inputs:
+  - type: filestream
+    paths: /var/log/deployctl/log.json
+    parsers:
+      - ndjson:
+        overwrite_keys: true
+        add_error_key: true
+        expand_keys: true
+
+processors:
+  - add_host_metadata: ~
+  - add_docker_metadata: ~
+  - add_fields:
+     target: service
+     fields:
+       name: dev-deployment-controller
+
+setup.template.name: logs-elastic_agent.filebeat
+setup.template.pattern: logs-elastic_agent.filebeat-*
+
+output.elasticsearch:
+  hosts: ["http://elastic.web.com:9200"]
+  username:
+  password:
+  ssl.certificate_authorities: ["/etc/elasticsearch/certs/ca.crt"]
+  index: "logs-elastic_agent.filebeat-deployctl-dev-%{[agent.version]}-%{+yyyy.MM.dd}"

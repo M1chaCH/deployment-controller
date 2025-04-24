@@ -1,7 +1,6 @@
 package mail
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"html/template"
 	"io"
@@ -16,7 +15,7 @@ func InitTemplates() {
 	onboardingCompleteTemplate, err = template.New(onboardingCompleteTemplateName).Parse(mustReadTemplateFile(onboardingCompleteFile))
 	mfaCodeTemplate, err = template.New(mfaCodeTemplateName).Parse(mustReadTemplateFile(mfaCodeFile))
 	if err != nil {
-		logs.Panic(fmt.Sprintf("Error loading contact request template: %v", err))
+		logs.Panic(nil, "Error loading contact request template: %v", err)
 	}
 }
 
@@ -67,7 +66,7 @@ func ParseMfaCodeTemplate(writer io.WriteCloser, data MfaCodeMailData) error {
 func mustReadTemplateFile(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("could not read file at: %s -- %v", path, err))
+		logs.Panic(nil, "could not read file at: %s -- %v", path, err)
 	}
 	return string(data)
 }

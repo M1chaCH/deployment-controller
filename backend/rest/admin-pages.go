@@ -3,7 +3,6 @@ package rest
 import (
 	"database/sql"
 	"errors"
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/data/pages"
@@ -19,7 +18,7 @@ var invalidCharsForTechnicalNameRegex = regexp.MustCompile(`[^a-zA-Z0-9-_]`)
 func getPages(c *gin.Context) {
 	data, err := pages.LoadPages(framework.GetTx(c))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load pages: %v", err))
+		logs.Warn(c, "failed to load pages: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to read pages"})
 		return
 	}
@@ -40,7 +39,7 @@ func postPage(c *gin.Context) {
 
 	err := pages.InsertNewPage(tx, page)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to insert new page: %v", err))
+		logs.Warn(c, "failed to insert new page: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create page"})
 		return
 	}
@@ -68,7 +67,7 @@ func putPage(c *gin.Context) {
 			return
 		}
 
-		logs.Warn(fmt.Sprintf("failed to update page: %v", err))
+		logs.Warn(c, "failed to update page: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to update page"})
 		return
 	}
@@ -82,7 +81,7 @@ func deletePage(c *gin.Context) {
 	pageId := c.Param("id")
 	err := pages.DeletePage(tx, pageId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to delete page: %v", err))
+		logs.Warn(c, "failed to delete page: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "page not deleted"})
 		return
 	}

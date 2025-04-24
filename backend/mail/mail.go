@@ -4,22 +4,27 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/gin-gonic/gin"
 	"io"
 	"net/smtp"
 	"sync"
 	"time"
 )
 
-func SendMailToAdmin(throttleId string, subject string, messageWriter func(writer io.WriteCloser) error) error {
-	config := framework.Config()
-	return SendMail(throttleId, config.Mail.Receiver, subject, messageWriter)
+// SendMailToAdmin sends an E-Mail to the configured admin address
+// the context should remain optional
+func SendMailToAdmin(c *gin.Context, throttleId string, subject string, messageWriter func(writer io.WriteCloser) error) error {
+	cnf := config.Config()
+	return SendMail(c, throttleId, cnf.Mail.Receiver, subject, messageWriter)
 }
 
 var sendMailMutex sync.Mutex
 
-func SendMail(throttleId string, receiver string, subject string, renderTemplate func(writer io.WriteCloser) error) error {
+// SendMail sends an E-Mail via SMTP
+// the context should remain optional
+func SendMail(c *gin.Context, throttleId string, receiver string, subject string, renderTemplate func(writer io.WriteCloser) error) error {
 	sendMailMutex.Lock()
 	defer sendMailMutex.Unlock()
 
@@ -28,89 +33,89 @@ func SendMail(throttleId string, receiver string, subject string, renderTemplate
 		return err
 	}
 
-	config := framework.Config()
+	cnf := config.Config()
 
-	client, err := smtp.Dial(fmt.Sprintf("%s:%d", config.Mail.SMTP.Host, config.Mail.SMTP.Port))
+	client, err := smtp.Dial(fmt.Sprintf("%s:%d", cnf.Mail.SMTP.Host, cnf.Mail.SMTP.Port))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Dial Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Dial Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	err = client.Hello("deployment-controller.michu-tech.com")
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Hello Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Hello Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	err = client.StartTLS(&tls.Config{
-		ServerName: config.Mail.SMTP.Host,
+		ServerName: cnf.Mail.SMTP.Host,
 	})
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Start TLS Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Start TLS Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
-	auth := smtp.PlainAuth("deployment-controller.michu-tech.com", config.Mail.SMTP.User, config.Mail.SMTP.Password, config.Mail.SMTP.Host)
+	auth := smtp.PlainAuth("deployment-controller.michu-tech.com", cnf.Mail.SMTP.User, cnf.Mail.SMTP.Password, cnf.Mail.SMTP.Host)
 	err = client.Auth(auth)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Auth Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Auth Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
-	err = client.Mail(config.Mail.Sender)
+	err = client.Mail(cnf.Mail.Sender)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Mail Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Mail Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	// more rcpt -> call this command more
 	err = client.Rcpt(receiver)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Rcpt Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Rcpt Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	bodyWriter, err := client.Data()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Data Error: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SMTP Data Error: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 	mimeHeaders := "MIME-version: 1.0;\nContent-Type: text/html; charset=\"UTF-8\";\n\n"
 	_, err = bodyWriter.Write([]byte(fmt.Sprintf("Subject: %s \n%s\n\n", subject, mimeHeaders)))
 	err = renderTemplate(bodyWriter)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SendMail failed to render body: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SendMail failed to render body: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	err = bodyWriter.Close()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SendMail failed to close body: %v", err))
-		tryResetConnection(client)
+		logs.Warn(c, "SendMail failed to close body: %v", err)
+		tryResetConnection(c, client)
 		return err
 	}
 
 	err = client.Quit()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("SMTP Quit Error: %v", err))
+		logs.Warn(c, "SMTP Quit Error: %v", err)
 		return err
 	}
 
 	return err
 }
 
-func tryResetConnection(client *smtp.Client) {
+func tryResetConnection(c *gin.Context, client *smtp.Client) {
 	err := client.Reset()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to reset smtp connection: %v", err))
+		logs.Warn(c, "failed to reset smtp connection: %v", err)
 	}
 }
 
@@ -130,7 +135,7 @@ func throttleSentMails(throttleId string) error {
 		throttleMap = make(map[string][]time.Time)
 	}
 
-	maxCount := framework.Config().Mail.MaxCount
+	maxCount := config.Config().Mail.MaxCount
 
 	mailSendTimes, found := throttleMap[throttleId]
 	if !found {
@@ -148,7 +153,7 @@ func throttleSentMails(throttleId string) error {
 
 	// this should never happen
 	if currentThrottledMails > maxCount {
-		logs.Severe(fmt.Sprintf("More mails throttled than allowed (to many) will block all, throttleId: %s count: %d", throttleId, currentThrottledMails))
+		logs.Error(nil, "More mails throttled than allowed (to many) will block all, throttleId: %s count: %d", throttleId, currentThrottledMails)
 		return TooManyMailsError
 	}
 
@@ -168,7 +173,7 @@ func removeOldThrottledMails(times []time.Time) []time.Time {
 		return times
 	}
 
-	duration := framework.Config().Mail.CountDuration
+	duration := config.Config().Mail.CountDuration
 	removeFromNowInPast := time.Now().Add(-time.Duration(duration) * time.Minute)
 	for i, t := range times {
 		// times is expected to be sorted -> we can return the content of times from where the first time is in range

@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
@@ -32,7 +31,7 @@ func authRequest(c *gin.Context) {
 
 	userPageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), userId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("Failed to load user page access for user '%s': %v", token.UserId, err))
+		logs.Warn(c, "Failed to load user page access for user '%s': %v", token.UserId, err)
 		RespondWithCookie(c, http.StatusForbidden, gin.H{"message": "access denied"})
 		return
 	}

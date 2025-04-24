@@ -5,16 +5,17 @@ import (
 	"database/sql"
 	"errors"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/pquerna/otp/totp"
 	"image/png"
 	"time"
 )
 
 func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail string) error {
-	config := framework.Config()
+	cnf := config.Config()
 
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      config.JWT.Domain,
+		Issuer:      cnf.JWT.Domain,
 		AccountName: userEmail,
 	})
 	if err != nil {

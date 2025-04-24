@@ -6,13 +6,14 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/M1chaCH/deployment-controller/location"
 	"github.com/M1chaCH/deployment-controller/mail"
 	"github.com/M1chaCH/deployment-controller/rest"
 	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
-	"net/http"
+	"go.elastic.co/apm/module/apmgin/v2"
 	"strings"
 )
 
@@ -67,37 +68,35 @@ Other
 */
 
 func main() {
-	appConfig := framework.Config()
-	host := appConfig.Host
-	port := appConfig.Port
+	cnf := config.Config()
+	host := cnf.Host
+	port := cnf.Port
+
+	logs.InitLogging()
 
 	auth.MakeSureAdminExists()
 	location.InitScheduledLocationCheck()
 	initCaches()
 
-	router := gin.Default()
-	router.Use(cors.New(cors.Config{
-		AllowOrigins:     strings.Split(appConfig.Cors.Origins, ","),
+	engine := gin.New()
+	engine.Use(apmgin.Middleware(engine))
+	engine.Use(cors.New(cors.Config{
+		AllowOrigins:     strings.Split(cnf.Cors.Origins, ","),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Cookie", "Set-Cookie"},
 		AllowCredentials: true,
 	}))
 
-	router.Use(framework.TransactionMiddleware())
-	router.Use(auth.IdentityJwtMiddleware())
-	router.Use(auth.AuthenticationMiddleware())
+	engine.Use(framework.TransactionMiddleware())
+	engine.Use(auth.IdentityJwtMiddleware())
+	engine.Use(auth.AuthenticationMiddleware())
 
-	router.GET("/ping", pong)
-	initRoutes(router)
+	initRoutes(engine)
 
-	err := router.Run(fmt.Sprintf("%s:%s", host, port))
+	err := engine.Run(fmt.Sprintf("%s:%s", host, port))
 	if err != nil {
-		logs.Severe(fmt.Sprintf("could not start server: %v", err))
+		logs.Error(nil, "could not start server: %v", err)
 	}
-}
-
-func pong(c *gin.Context) {
-	auth.RespondWithCookie(c, http.StatusOK, gin.H{"message": "pong"})
 }
 
 func initCaches() {

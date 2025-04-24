@@ -2,10 +2,10 @@ package users
 
 import (
 	"errors"
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
 	"time"
 )
@@ -22,17 +22,17 @@ func LoadUsers(txFunc framework.LoadableTx) ([]UserEntity, error) {
 	return users, err
 }
 
-func LoadUserByMail(txFunc framework.LoadableTx, mail string) (UserEntity, bool) {
-	tx, err := txFunc()
+func LoadUserByMail(c *gin.Context, mail string) (UserEntity, bool) {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to check db: %v", err))
+		logs.Warn(c, "failed to check db: %v", err)
 		return UserEntity{}, false
 	}
 
 	var result []UserEntity
 	err = tx.Select(&result, "select * from users where mail = $1", mail)
 	if err != nil {
-		logs.Info("failed to select UserEntity by mail: " + err.Error())
+		logs.Info(c, "failed to select UserEntity by mail: "+err.Error())
 		return UserEntity{}, false
 	}
 	if len(result) == 0 {
@@ -44,17 +44,17 @@ func LoadUserByMail(txFunc framework.LoadableTx, mail string) (UserEntity, bool)
 	return user, true
 }
 
-func LoadUserById(txFunc framework.LoadableTx, id string) (UserEntity, bool) {
-	tx, err := txFunc()
+func LoadUserById(c *gin.Context, id string) (UserEntity, bool) {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to check db: %v", err))
+		logs.Warn(c, "failed to check db: %v", err)
 		return UserEntity{}, false
 	}
 
 	var result []UserEntity
 	err = tx.Select(&result, "select * from users where id = $1", id)
 	if err != nil {
-		logs.Info("failed to select UserEntity by id: " + err.Error())
+		logs.Info(c, "failed to select UserEntity by id: "+err.Error())
 		return UserEntity{}, false
 	}
 	if len(result) == 0 {
@@ -65,7 +65,8 @@ func LoadUserById(txFunc framework.LoadableTx, id string) (UserEntity, bool) {
 	return user, true
 }
 
-func InsertNewUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, mfaType string, pageIds []string) error {
+func InsertNewUser(c *gin.Context, id string, mail string, password string, salt []byte, admin bool, blocked bool, mfaType string, pageIds []string) error {
+	txFunc := framework.GetTx(c)
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -86,11 +87,12 @@ VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		return err
 	}
 
-	logs.Info(fmt.Sprintf("inserted new UserEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds)))
+	logs.Info(c, "inserted new UserEntity: id:%s mail:%s admin:%t pages:%d", id, mail, admin, len(pageIds))
 	return nil
 }
 
-func UpdateUser(txFunc framework.LoadableTx, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, mfaType string, pageIdsToRemove []string, pageIdsToAdd []string) error {
+func UpdateUser(c *gin.Context, id string, mail string, password string, salt []byte, admin bool, blocked bool, onboard bool, lastLogin time.Time, mfaType string, pageIdsToRemove []string, pageIdsToAdd []string) error {
+	txFunc := framework.GetTx(c)
 	tx, err := txFunc()
 	if err != nil {
 		return err
@@ -125,12 +127,12 @@ WHERE id = $9
 		return errors.New("user not found")
 	}
 
-	logs.Info(fmt.Sprintf("updated user: id:%s mail:%s admin:%t newPages:%d", id, mail, admin, len(pageIdsToAdd)-len(pageIdsToRemove)))
+	logs.Info(c, "updated user: id:%s mail:%s admin:%t newPages:%d", id, mail, admin, len(pageIdsToAdd)-len(pageIdsToRemove))
 	return nil
 }
 
-func DeleteUser(txFunc framework.LoadableTx, id string) error {
-	tx, err := txFunc()
+func DeleteUser(c *gin.Context, id string) error {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
 		return err
 	}
@@ -138,16 +140,16 @@ func DeleteUser(txFunc framework.LoadableTx, id string) error {
 	_, err = tx.Exec("DELETE FROM users WHERE id = $1", id)
 
 	if err == nil {
-		logs.Info(fmt.Sprintf("deleted user: id:%s", id))
+		logs.Info(c, "deleted user: id:%s", id)
 	}
 
 	return err
 }
 
-func UserExists(txFunc framework.LoadableTx, id string) bool {
-	tx, err := txFunc()
+func UserExists(c *gin.Context, id string) bool {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to get transaction for UserExists: %v", err))
+		logs.Warn(c, "failed to get transaction for UserExists: %v", err)
 		return false
 	}
 
@@ -160,10 +162,10 @@ func UserExists(txFunc framework.LoadableTx, id string) bool {
 	return true
 }
 
-func SimilarUserExists(txFunc framework.LoadableTx, id string, mail string) bool {
-	tx, err := txFunc()
+func SimilarUserExists(c *gin.Context, id string, mail string) bool {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to get transaction for SimilarUserExists: %v", err))
+		logs.Warn(c, "failed to get transaction for SimilarUserExists: %v", err)
 		return false
 	}
 
@@ -171,17 +173,17 @@ func SimilarUserExists(txFunc framework.LoadableTx, id string, mail string) bool
 	err = tx.Select(&result, "select * from users where id = $1 or mail = $2", id, mail)
 	if err != nil || len(result) == 0 {
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to select user by mail or id: %s, %s -> %v", id, mail, err))
+			logs.Warn(c, "failed to select user by mail or id: %s, %s -> %v", id, mail, err)
 		}
 		return false
 	}
 	return true
 }
 
-func MailExists(txFunc framework.LoadableTx, mail string, excludedUserId string) bool {
-	tx, err := txFunc()
+func MailExists(c *gin.Context, mail string, excludedUserId string) bool {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to get transaction for MailExists: %v", err))
+		logs.Warn(c, "failed to get transaction for MailExists: %v", err)
 		return false
 	}
 
@@ -189,17 +191,17 @@ func MailExists(txFunc framework.LoadableTx, mail string, excludedUserId string)
 	err = tx.Select(&result, "select * from users where mail = $1 and id != $2", mail, excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to select users by mail: %s -> %v", mail, err))
+			logs.Warn(c, "failed to select users by mail: %s -> %v", mail, err)
 		}
 		return false
 	}
 	return true
 }
 
-func DifferentAdminExists(txFunc framework.LoadableTx, excludedUserId string) bool {
-	tx, err := txFunc()
+func DifferentAdminExists(c *gin.Context, excludedUserId string) bool {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to get transaction for DifferentAdminExists: %v", err))
+		logs.Warn(c, "failed to get transaction for DifferentAdminExists: %v", err)
 		return false
 	}
 
@@ -207,7 +209,7 @@ func DifferentAdminExists(txFunc framework.LoadableTx, excludedUserId string) bo
 	err = tx.Select(&result, "select * from users where admin = true and id != $1", excludedUserId)
 	if err != nil || len(result) == 0 {
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to select users for admin check: %v", err))
+			logs.Warn(c, "failed to select users for admin check: %v", err)
 		}
 		return false
 	}

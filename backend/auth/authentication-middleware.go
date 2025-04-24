@@ -1,7 +1,6 @@
 package auth
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
@@ -21,9 +20,9 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		// 1. check if valid token is available
 		requestToken, ok := getIdentityToken(c, idJwtContextKey)
 		if !ok || requestToken.Issuer == "" {
-			newIdToken, err := processNewClient(uuid.NewString(), requestIp, requestAgent)
+			newIdToken, err := processNewClient(c, uuid.NewString(), requestIp, requestAgent)
 			if err != nil {
-				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
+				logs.Warn(c, "could not create new client, %v", err)
 				AbortWithCooke(c, 500, "failed to process request")
 				return
 			}
@@ -34,17 +33,17 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 		}
 
 		// 2. check if issuer exists
-		client, found, err := clients.LoadClientInfo(requestToken.Issuer)
+		client, found, err := clients.LoadClientInfo(c, requestToken.Issuer)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("client from cookie was not found due to internal error!, %v", err))
+			logs.Warn(c, "client from cookie was not found due to internal error!, %v", err)
 			AbortWithCooke(c, 500, "failed to process request")
 			return
 		}
 		if !found {
-			logs.Warn(fmt.Sprintf("client from cookie was not found, %s", requestToken.Issuer))
-			newIdToken, err := processNewClient(requestToken.Issuer, requestIp, requestAgent)
+			logs.Warn(c, "client from cookie was not found, %s", requestToken.Issuer)
+			newIdToken, err := processNewClient(c, requestToken.Issuer, requestIp, requestAgent)
 			if err != nil {
-				logs.Warn(fmt.Sprintf("could not create new client, %v", err))
+				logs.Warn(c, "could not create new client, %v", err)
 				AbortWithCooke(c, 500, "failed to process request")
 				return
 			}
@@ -95,7 +94,7 @@ func AuthenticationMiddleware() gin.HandlerFunc {
 			return
 		}
 
-		logs.Severe(fmt.Sprintf("login state could not be handled properly for client: %v (this line should not be reachable) -- failing", client.Id))
+		logs.Error(c, "login state could not be handled properly for client: %v (this line should not be reachable) -- failing", client.Id)
 		AbortWithCooke(c, 500, "failed to process request")
 	}
 }
@@ -105,14 +104,14 @@ func didDeviceChange(requestIp, requestAgent string, token IdentityToken) bool {
 }
 
 func addDeviceAndComplete(c *gin.Context, token IdentityToken, requestIp, requestAgent string) {
-	_, err := clients.AddDeviceToClient(token.Issuer, requestIp, requestAgent)
+	_, err := clients.AddDeviceToClient(c, token.Issuer, requestIp, requestAgent)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to add device to client, %v", err))
+		logs.Warn(c, "failed to add device to client, %v", err)
 		AbortWithCooke(c, 500, "failed to process request")
 		return
 	}
 
-	logs.Info(fmt.Sprintf("client changed to other known device: client:%s agent:%s ip:%s", token.Issuer, requestAgent, requestIp))
+	logs.Info(c, "client changed to other known device: client:%s agent:%s ip:%s", token.Issuer, requestAgent, requestIp)
 	complete(c, token, requestIp, requestAgent)
 }
 

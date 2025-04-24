@@ -2,7 +2,7 @@ package auth
 
 import (
 	"fmt"
-	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"net/http"
@@ -20,7 +20,7 @@ func IdentityJwtMiddleware() gin.HandlerFunc {
 
 		var token IdentityToken
 		if !tokenFailed {
-			token, err = parseIdentityToken(tokenString)
+			token, err = parseIdentityToken(c, tokenString)
 			if err != nil {
 				tokenFailed = true
 			}
@@ -40,18 +40,18 @@ func IdentityJwtMiddleware() gin.HandlerFunc {
 func AppendJwtToken(c *gin.Context) {
 	newToken, ok := getIdentityToken(c, updatedIdJwtContextKey)
 	if !ok {
-		logs.Warn("found request with invalid updated ID tokens")
+		logs.Warn(c, "found request with invalid updated ID tokens")
 		return
 	}
 
 	newTokenString, err := newToken.ToJwtString()
 	if err != nil {
-		logs.Severe(fmt.Sprintf("could not parse ID tokens, %v", err))
+		logs.Error(c, fmt.Sprintf("could not parse ID tokens, %v", err))
 		return
 	}
 
 	// keep the cookie as long as possible, don't want to lose the clientId
-	config := framework.Config()
+	cnf := config.Config()
 	maxAge := 60 * 60 * 24 * 400 // 400 days in seconds
 	c.SetSameSite(http.SameSiteStrictMode)
 	c.SetCookie(idJwtCookieName, newTokenString, maxAge, "/", config.JWT.Domain, true, true)

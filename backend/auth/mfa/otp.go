@@ -6,14 +6,18 @@ import (
 	"github.com/M1chaCH/deployment-controller/auth/mfa/mailtotp"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/gin-gonic/gin"
 )
 
 const TypeApp = "mfa-apptotp"
 const TypeMail = "mfa-mailtotp"
 const ErrMfaTypeUnknown = "unknown MFA type"
 
-func Prepare(loadableTx framework.LoadableTx, userId string, mfaType string) error {
-	user, found := users.LoadUserById(loadableTx, userId)
+func Prepare(c *gin.Context, userId string, mfaType string) error {
+	return PrepareOptionalLogging(c, framework.GetTx(c), userId, mfaType)
+}
+func PrepareOptionalLogging(c *gin.Context, loadableTx framework.LoadableTx, userId string, mfaType string) error {
+	user, found := users.LoadUserById(c, userId)
 	if !found {
 		return errors.New("unknown user")
 	}
@@ -62,20 +66,20 @@ func GetQrImageAndUrl(loadableTx framework.LoadableTx, userId string) ([]byte, s
 	return apptotp.LoadTotpImageAndUrl(loadableTx, userId)
 }
 
-func HandleChangedTotpType(loadableTx framework.LoadableTx, userId string, newType string) error {
+func HandleChangedTotpType(c *gin.Context, userId string, newType string) error {
 	if newType != TypeApp && newType != TypeMail {
 		return errors.New(ErrMfaTypeUnknown)
 	}
 
-	err := ClearTokenOfUser(loadableTx, userId)
+	err := ClearTokenOfUser(framework.GetTx(c), userId)
 	if err != nil {
 		return err
 	}
 
-	err = Prepare(loadableTx, userId, newType)
+	err = Prepare(c, userId, newType)
 	return err
 }
 
-func SendMailTotp(loadableTx framework.LoadableTx, userId string, mail string, checkValidated bool) error {
-	return mailtotp.SendTotp(loadableTx, userId, mail, checkValidated)
+func SendMailTotp(c *gin.Context, userId string, mail string, checkValidated bool) error {
+	return mailtotp.SendTotp(c, userId, mail, checkValidated)
 }

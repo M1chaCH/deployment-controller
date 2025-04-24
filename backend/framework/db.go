@@ -2,6 +2,7 @@ package framework
 
 import (
 	"fmt"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/jmoiron/sqlx"
@@ -34,14 +35,16 @@ func GetTx(c *gin.Context) LoadableTx {
 	}
 }
 
+// DB creates and tests a new connection to the DB.
+// TODO remove panics, this might be called from within requests, don't want to crash backend
 func DB() *sqlx.DB {
 	if configuredDb != nil {
 		return configuredDb
 	}
-	config := getAndValidateDbConfig()
+	cnf := getAndValidateDbConfig()
 
 	db, err := sqlx.Open("postgres", fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=disable",
-		config.Db.Host, config.Db.Port, config.Db.User, config.Db.Password, config.Db.Name))
+		cnf.Db.Host, cnf.Db.Port, cnf.Db.User, cnf.Db.Password, cnf.Db.Name))
 	if err != nil {
 		panic(fmt.Sprintf("failed to open DB: %s", err))
 	}
@@ -56,7 +59,7 @@ func DB() *sqlx.DB {
 	db.SetConnMaxIdleTime(time.Hour)
 	db.SetConnMaxLifetime(8 * time.Hour)
 
-	logs.Info(fmt.Sprintf("Connected to database: %s:%d %s", config.Db.Host, config.Db.Port, config.Db.Name))
+	logs.Info(nil, "Connected to database: %s:%d %s", cnf.Db.Host, cnf.Db.Port, cnf.Db.Name)
 	configuredDb = db
 	return configuredDb
 }
@@ -71,7 +74,7 @@ func getTxFromContext(c *gin.Context) *sqlx.Tx {
 
 	tx, ok := value.(*sqlx.Tx)
 	if !ok {
-		logs.Severe("set transaction is not a transaction?!?")
+		logs.Error(c, "set transaction is not a transaction?!?")
 	}
 	return tx
 }
@@ -92,49 +95,49 @@ func TransactionMiddleware() gin.HandlerFunc {
 		if c.Writer.Status() < 400 {
 			err := tx.Commit()
 			if err != nil {
-				logs.Info(fmt.Sprintf("failed to commit transaction: %s", err))
+				logs.Info(c, "failed to commit transaction: %s", err)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "changes could not be saved"})
 				return
 			}
 		} else {
 			err := tx.Rollback()
 			if err != nil {
-				logs.Info(fmt.Sprintf("failed to rollback transaction: %s", err))
+				logs.Info(c, "failed to rollback transaction: %s", err)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "internal DB error"})
 				return
 			}
-			logs.Info("transaction rolled back")
+			logs.Info(c, "transaction rolled back")
 		}
 	}
 }
 
 var configuredDb *sqlx.DB
 
-func getAndValidateDbConfig() *AppConfig {
-	config := Config()
+func getAndValidateDbConfig() *config.AppConfig {
+	cnf := config.Config()
 
-	if config.Db.Name == "" {
-		logs.Info("DB Name is not configured, using default: 'deployment_controller'")
-		config.Db.Name = "deployment_controller"
+	if cnf.Db.Name == "" {
+		logs.Info(nil, "DB Name is not configured, using default: 'deployment_controller'")
+		cnf.Db.Name = "deployment_controller"
 	}
 
-	if config.Db.User == "" {
+	if cnf.Db.User == "" {
 		panic("DB User not configured")
 	}
 
-	if config.Db.Password == "" {
+	if cnf.Db.Password == "" {
 		panic("DB Password not configured")
 	}
 
-	if config.Db.Host == "" {
-		logs.Info("DB Host is not configured, using default: 'localhost'")
-		config.Db.Host = "localhost"
+	if cnf.Db.Host == "" {
+		logs.Info(nil, "DB Host is not configured, using default: 'localhost'")
+		cnf.Db.Host = "localhost"
 	}
 
-	if config.Db.Port == 0 {
-		logs.Info("DB Port is not configured, using default: '5432'")
-		config.Db.Port = 5432
+	if cnf.Db.Port == 0 {
+		logs.Info(nil, "DB Port is not configured, using default: '5432'")
+		cnf.Db.Port = 5432
 	}
 
-	return config
+	return cnf
 }

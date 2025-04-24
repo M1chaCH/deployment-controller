@@ -5,8 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/caches"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"io"
 	"net/http"
@@ -44,12 +44,12 @@ var cache = caches.GetCache[CacheItem]()
 func InitCache() {
 	err := cache.Initialize(make([]CacheItem, 0))
 	if err != nil {
-		logs.Panic(fmt.Sprintf("Error initializing cache for location cache: %v", err))
+		logs.Panic(nil, "Error initializing cache for location cache: %v", err)
 	}
 
-	config := framework.Config().Location.CacheExpireHours
-	cache.SetLifetime(time.Duration(config) + time.Hour)
-	logs.Info("successfully initialized locations cache")
+	cnf := config.Config().Location.CacheExpireHours
+	cache.SetLifetime(time.Duration(cnf) + time.Hour)
+	logs.Info(nil, "successfully initialized locations cache")
 }
 
 var privateIpRegexp = regexp.MustCompile(`(^192\.168\..*$)|(^172\.16\..*$)|(^10\..*$)`)
@@ -61,7 +61,7 @@ func LoadLocation(ip string) (CacheItem, error) {
 
 	// 172.18.0.1 is a docker ip found during development
 	if privateIpRegexp.MatchString(ip) || strings.ToLower(ip) == "localhost" || ip == "127.0.0.1" || ip == "172.18.0.1" {
-		ip = framework.Config().Location.LocalIp
+		ip = config.Config().Location.LocalIp
 	}
 
 	if cache.IsInitialized() {
@@ -71,9 +71,9 @@ func LoadLocation(ip string) (CacheItem, error) {
 		}
 	}
 
-	logs.Info("ip not found in cache, checking geoip: " + ip)
-	config := framework.Config()
-	auth := config.Location.Account + ":" + config.Location.License
+	logs.Info(nil, "ip not found in cache, checking geoip: "+ip)
+	cnf := config.Config()
+	auth := cnf.Location.Account + ":" + cnf.Location.License
 	encodedAuth := base64.StdEncoding.EncodeToString([]byte(auth))
 
 	request, err := http.NewRequest(http.MethodGet, fmt.Sprintf("https://geolite.info/geoip/v2.1/city/%s", ip), nil)
@@ -89,7 +89,7 @@ func LoadLocation(ip string) (CacheItem, error) {
 	defer func(Body io.ReadCloser) {
 		err := Body.Close()
 		if err != nil {
-			logs.Warn(fmt.Sprintf("Error closing location request response body: %v", err))
+			logs.Warn(nil, "Error closing location request response body: %v", err)
 		}
 	}(response.Body)
 
@@ -114,7 +114,7 @@ func LoadLocation(ip string) (CacheItem, error) {
 	cacheItem.CityPlz = data.Postal.Code
 	if len(data.Subdivisions) > 0 {
 		if len(data.Subdivisions) > 1 {
-			logs.Warn(fmt.Sprintf("got %d subdevisions for ip %s", len(data.Subdivisions), ip))
+			logs.Warn(nil, "got %d subdevisions for ip %s", len(data.Subdivisions), ip)
 		}
 
 		cacheItem.SubdivisionId = data.Subdivisions[0].GeonameId
@@ -134,7 +134,7 @@ func LoadLocation(ip string) (CacheItem, error) {
 	cacheItem.IpAddress = ip
 
 	if data.Traits.IpAddress != ip {
-		logs.Warn(fmt.Sprintf("requested location for ip '%s' but got for ip '%s'", ip, data.Traits.IpAddress))
+		logs.Warn(nil, "requested location for ip '%s' but got for ip '%s'", ip, data.Traits.IpAddress)
 	}
 
 	cache.StoreSafeBackground(cacheItem)

@@ -2,7 +2,6 @@ package rest
 
 import (
 	"errors"
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/auth"
 	"github.com/M1chaCH/deployment-controller/auth/mfa"
 	"github.com/M1chaCH/deployment-controller/data/clients"
@@ -10,6 +9,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/pages"
 	"github.com/M1chaCH/deployment-controller/data/users"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/M1chaCH/deployment-controller/mail"
 	"github.com/gin-gonic/gin"
@@ -54,14 +54,14 @@ func postLogin(c *gin.Context) {
 		return
 	}
 
-	user, ok := users.LoadUserByMail(framework.GetTx(c), dto.Mail)
+	user, ok := users.LoadUserByMail(c, dto.Mail)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "login failed"})
 		return
 	}
 
 	if user.Blocked {
-		logs.Info(fmt.Sprintf("blocked user tryed to login: %s", user.Id))
+		logs.Info(c, "blocked user tryed to login: %s", user.Id)
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "login failed"})
 		return
 	}
@@ -116,7 +116,7 @@ func putUserPassword(c *gin.Context) {
 
 	var dto changePasswordDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind data from change password request: %v", err))
+		logs.Info(c, "failed to bind data from change password request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return
 	}
@@ -166,7 +166,7 @@ func handleGetOnboardingToken(c *gin.Context) ([]byte, string, bool) {
 
 	image, url, err := mfa.GetQrImageAndUrl(framework.GetTx(c), idToken.UserId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load totp for user: %s - %v", idToken.UserId, err))
+		logs.Warn(c, "failed to load totp for user: %s - %v", idToken.UserId, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load token"})
 		return nil, "", false
 	}
@@ -183,7 +183,7 @@ func postCompleteOnboarding(c *gin.Context) {
 
 	var dto changePasswordDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind data from onboarding request: %v", err))
+		logs.Info(c, "failed to bind data from onboarding request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return
 	}
@@ -192,7 +192,7 @@ func postCompleteOnboarding(c *gin.Context) {
 
 	valid, err := mfa.InitialValidate(tx, idToken.UserId, dto.MfaType, dto.Token)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to validate token: %v", err))
+		logs.Warn(c, "failed to validate token: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "invalid token"})
 		return
 	}
@@ -201,17 +201,17 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	client, found, err := clients.LoadClientInfo(idToken.Issuer)
+	client, found, err := clients.LoadClientInfo(c, idToken.Issuer)
 	if err != nil || !found {
-		logs.Warn(fmt.Sprintf("failed to load client info: %v / found: %v", err, found))
+		logs.Warn(c, "failed to load client info: %v / found: %v", err, found)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
 
 	device, found := clients.GetCurrentDevice(client, idToken.OriginIp, idToken.OriginAgent)
-	err = clients.MarkDeviceAsValidated(framework.GetTx(c), idToken.Issuer, device.Id)
+	err = clients.MarkDeviceAsValidated(c, idToken.Issuer, device.Id)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to mark device as validated while onboarding: client: %s - device: %s", client.Id, device.Id))
+		logs.Warn(c, "failed to mark device as validated while onboarding: client: %s - device: %s", client.Id, device.Id)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
@@ -221,16 +221,16 @@ func postCompleteOnboarding(c *gin.Context) {
 		return
 	}
 
-	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	user, found := users.LoadUserById(c, idToken.UserId)
 	if !found {
-		logs.Warn(fmt.Sprintf("failed to load user with id, not found: %s", idToken.UserId))
+		logs.Warn(c, "failed to load user with id, not found: %s", idToken.UserId)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
 
 	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), idToken.UserId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		logs.Warn(c, "failed to load user page access: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "onboarding failed"})
 		return
 	}
@@ -248,7 +248,7 @@ func postCompleteOnboarding(c *gin.Context) {
 		}
 	}
 
-	err = mail.SendMailToAdmin(mail.TechnicalNoThrottle, "michu-tech Onboarding Complete", func(writer io.WriteCloser) error {
+	err = mail.SendMailToAdmin(c, mail.TechnicalNoThrottle, "michu-tech Onboarding Complete", func(writer io.WriteCloser) error {
 		return mail.ParseOnboardingCompleteTemplate(writer, mail.OnboardingCompleteMailData{
 			UserMail:       user.Mail,
 			UserPageAccess: pagesString,
@@ -272,7 +272,7 @@ func postSendMfaToken(c *gin.Context) {
 		return
 	}
 
-	user, found := users.LoadUserById(framework.GetTx(c), idToken.UserId)
+	user, found := users.LoadUserById(c, idToken.UserId)
 	if !found {
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "user does not exist"})
 		return
@@ -289,9 +289,9 @@ func postSendMfaToken(c *gin.Context) {
 		checkValidated = false
 	}
 
-	err := mfa.SendMailTotp(framework.GetTx(c), user.Id, user.Mail, checkValidated)
+	err := mfa.SendMailTotp(c, user.Id, user.Mail, checkValidated)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to send totp for user: %s - %v", idToken.UserId, err))
+		logs.Warn(c, "failed to send totp for user: %s - %v", idToken.UserId, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to send totp"})
 		return
 	}
@@ -354,8 +354,7 @@ func putChangeMfaType(c *gin.Context) {
 		return
 	}
 
-	tx := framework.GetTx(c)
-	user, found := users.LoadUserById(tx, dto.UserId)
+	user, found := users.LoadUserById(c, dto.UserId)
 	if !found {
 		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user does not exist"})
 		return
@@ -371,16 +370,16 @@ func putChangeMfaType(c *gin.Context) {
 		return
 	}
 
-	err := users.UpdateUser(tx, dto.UserId, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, user.LastLogin, dto.MfaType, make([]string, 0), make([]string, 0))
+	err := users.UpdateUser(c, dto.UserId, user.Mail, user.Password, user.Salt, user.Admin, user.Blocked, user.Onboard, user.LastLogin, dto.MfaType, make([]string, 0), make([]string, 0))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to update user: %v", err))
+		logs.Warn(c, "failed to update user: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
 		return
 	}
 
-	err = mfa.HandleChangedTotpType(tx, dto.UserId, dto.MfaType)
+	err = mfa.HandleChangedTotpType(c, dto.UserId, dto.MfaType)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to change totp type: %v", err))
+		logs.Warn(c, "failed to change totp type: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "internal error"})
 		return
 	}
@@ -407,14 +406,14 @@ func getOverviewPages(c *gin.Context) {
 
 	pageEntities, err := pages.LoadPages(framework.GetTx(c))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load pages: %v", err))
+		logs.Warn(c, "failed to load pages: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load pages"})
 		return
 	}
 
 	pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), userId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+		logs.Warn(c, "failed to load user page access: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load page access"})
 		return
 	}
@@ -458,7 +457,7 @@ func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.I
 		return false
 	}
 
-	user, ok := users.LoadUserById(framework.GetTx(c), dto.UserId)
+	user, ok := users.LoadUserById(c, dto.UserId)
 	if !ok {
 		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user does not exist"})
 		return false
@@ -479,14 +478,14 @@ func changePasswordHandler(c *gin.Context, dto changePasswordDto, idToken auth.I
 
 	hashedNewPassword, salt, err := framework.SecureHashWithSalt(dto.NewPassword)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to hash new password for user id: %s -> %v", dto.UserId, err))
+		logs.Warn(c, "failed to hash new password for user id: %s -> %v", dto.UserId, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not convert password!"})
 		return false
 	}
 
-	err = users.UpdateUser(framework.GetTx(c), user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, user.MfaType, make([]string, 0), make([]string, 0))
+	err = users.UpdateUser(c, user.Id, user.Mail, hashedNewPassword, salt, user.Admin, user.Blocked, true, user.LastLogin, user.MfaType, make([]string, 0), make([]string, 0))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to save new password for user: %s -> %v", dto.UserId, err))
+		logs.Warn(c, "failed to save new password for user: %s -> %v", dto.UserId, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "could not save changes to user!"})
 		return false
 	}
@@ -510,24 +509,24 @@ func postContact(c *gin.Context) {
 
 	var dto contactDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind data from contact request: %v", err))
+		logs.Info(c, "failed to bind data from contact request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return
 	}
 
-	if len(dto.Message) > framework.Config().Mail.MaxMessageLength {
+	if len(dto.Message) > config.Config().Mail.MaxMessageLength {
 		auth.RespondWithCookie(c, http.StatusRequestEntityTooLarge, gin.H{"message": "message too long"})
 		return
 	}
 
-	deviceId, err := clients.LookupDeviceId(idToken.Issuer, idToken.OriginIp, idToken.OriginAgent)
+	deviceId, err := clients.LookupDeviceId(c, idToken.Issuer, idToken.OriginIp, idToken.OriginAgent)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("device of request not found: %v -- clientId:%s ip:%s agent:%s", err, idToken.Issuer, idToken.OriginIp, idToken.OriginAgent))
+		logs.Warn(c, "device of request not found: %v -- clientId:%s ip:%s agent:%s", err, idToken.Issuer, idToken.OriginIp, idToken.OriginAgent)
 		deviceId = "not found: " + err.Error()
 	}
 
 	// todo cleanup this api, create the function in the mail package, not as the param
-	err = mail.SendMailToAdmin(idToken.Issuer, "michu-tech Contact request", func(writer io.WriteCloser) error {
+	err = mail.SendMailToAdmin(c, idToken.Issuer, "michu-tech Contact request", func(writer io.WriteCloser) error {
 		return mail.ParseContactRequestTemplate(writer, mail.ContactRequestMailData{
 			ClientId: idToken.Issuer,
 			DeviceId: deviceId,
@@ -538,12 +537,12 @@ func postContact(c *gin.Context) {
 
 	if err != nil {
 		if errors.Is(err, mail.TooManyMailsError) {
-			logs.Warn(fmt.Sprintf("mail threshold was reached by client: %s", idToken.Issuer))
+			logs.Warn(c, "mail threshold was reached by client: %s", idToken.Issuer)
 			auth.RespondWithCookie(c, http.StatusTooManyRequests, gin.H{"message": "too many mails sent, wait some time and try again"})
 			return
 		}
 
-		logs.Warn(fmt.Sprintf("failed to send mail: %v", err))
+		logs.Warn(c, "failed to send mail: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to send mail"})
 		return
 	}

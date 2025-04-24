@@ -204,3 +204,6 @@ Thumbs.db
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 /frontend/.svelte-kit/
+/dev-env/backend-filebeat/data/
+/dev-env/backend-filebeat/backend-log.json
+/dev-env/ekl-certs/

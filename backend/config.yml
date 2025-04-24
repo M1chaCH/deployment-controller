@@ -37,3 +37,6 @@ location:
   cache_expire_hours: 48
   check_wait_time_minutes: 10
   local_ip:
+log:
+  level: 5 # logrus debug
+  file_name: ../dev-env/backend-filebeat/backend-log.json

@@ -1,7 +1,6 @@
 package framework
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"time"
 )
@@ -17,11 +16,11 @@ func run(taskName string, sleepMinutes int, task func() error) {
 	failed := false
 	maxSleepDuration := time.Duration(24) * time.Hour * 3 // max wait 3 days
 
-	logs.Info(fmt.Sprintf("periodically scheduled check (every %d min): '%s'", sleepConfig, taskName))
+	logs.Info(nil, "periodically scheduled check (every %d min): '%s'", sleepConfig, taskName)
 	for {
 		time.Sleep(sleepDuration)
 
-		logs.Info("SCHEDULE: running task: " + taskName)
+		logs.Info(nil, "SCHEDULE: running task: "+taskName)
 		err := task()
 
 		if err != nil {
@@ -29,17 +28,17 @@ func run(taskName string, sleepMinutes int, task func() error) {
 				sleepConfig *= 2
 				sleepDuration *= 2
 			}
-			logs.Warn(fmt.Sprintf("SCHEDULE: Failed to run check '%s' (will try again in %d mins): %v", taskName, sleepConfig, err))
+			logs.Warn(nil, "SCHEDULE: Failed to run check '%s' (will try again in %d mins): %v", taskName, sleepConfig, err)
 			failed = true
 		} else if failed { // previous run failed, but this run ran successfully
 			failed = false
 			sleepConfig = originalSleepConfig
 			sleepDuration = time.Duration(sleepConfig) * time.Minute
-			logs.Info(fmt.Sprintf("SCHEDULE: recovered failed check '%s'", taskName))
+			logs.Info(nil, "SCHEDULE: recovered failed check '%s'", taskName)
 		}
 
 		if err == nil {
-			logs.Info(fmt.Sprintf("SCHEDULE: successfully ran task: %s, next run in %d minutes", taskName, sleepConfig))
+			logs.Info(nil, "SCHEDULE: successfully ran task: %s, next run in %d minutes", taskName, sleepConfig)
 		}
 	}
 }

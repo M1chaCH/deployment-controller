@@ -2,7 +2,6 @@ package caches
 
 import (
 	"errors"
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"reflect"
 	"time"
@@ -105,7 +104,7 @@ func (c *localItemsCache[T]) StoreSafeBackground(entity T) {
 	err := c.Store(entity)
 	if err != nil {
 		typeName := reflect.TypeOf(entity).Name()
-		logs.Severe(fmt.Sprintf("safe background store failed, cache for '%s' dead, %v", typeName, err))
+		logs.Error(nil, "safe background store failed, cache for '%s' dead, %v", typeName, err)
 		c.Clear()
 	}
 }

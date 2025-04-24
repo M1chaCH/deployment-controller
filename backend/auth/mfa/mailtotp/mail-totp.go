@@ -5,7 +5,9 @@ import (
 	"errors"
 	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/mail"
+	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp"
 	"github.com/pquerna/otp/totp"
 	"io"
@@ -41,10 +43,10 @@ Does not matter if user MFAs with app or email, both must take the same steps.
 */
 
 func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail string) error {
-	config := framework.Config()
+	cnf := config.Config()
 
 	key, err := totp.Generate(totp.GenerateOpts{
-		Issuer:      config.JWT.Domain,
+		Issuer:      cnf.JWT.Domain,
 		AccountName: userEmail,
 		Period:      totpPeriodeSeconds,
 	})
@@ -59,10 +61,10 @@ func PrepareTotp(loadableTx framework.LoadableTx, userId string, userEmail strin
 	})
 }
 
-func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, checkValidated bool) error {
-	config := framework.Config()
+func SendTotp(c *gin.Context, userId string, userEmail string, checkValidated bool) error {
+	cnf := config.Config()
 
-	token, err := selectMailTotp(loadableTx, userId)
+	token, err := selectMailTotp(framework.GetTx(c), userId)
 	if err != nil {
 		return err
 	}
@@ -86,9 +88,9 @@ func SendTotp(loadableTx framework.LoadableTx, userId string, userEmail string, 
 		return err
 	}
 
-	err = mail.SendMail(fmt.Sprintf("totp-%s", userId), userEmail, "Authentication Code", func(writer io.WriteCloser) error {
+	err = mail.SendMail(c, fmt.Sprintf("totp-%s", userId), userEmail, "Authentication Code", func(writer io.WriteCloser) error {
 		return mail.ParseMfaCodeTemplate(writer, mail.MfaCodeMailData{
-			AdminMail: config.Mail.Receiver,
+			AdminMail: cnf.Mail.Receiver,
 			MfaCode:   code,
 		})
 	})

@@ -2,10 +2,10 @@ package clients
 
 import (
 	"database/sql"
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/caches"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/jmoiron/sqlx"
 	"time"
@@ -42,21 +42,21 @@ Scenarios
 var cache = caches.GetCache[ClientCacheItem]()
 
 func InitCache() {
-	logs.Info("Initializing cache for clients")
+	logs.Info(nil, "Initializing cache for clients")
 
 	initial, err := selectAllClients()
 	if err != nil {
-		logs.Panic(fmt.Sprintf("could not initialize client cache: %v", err))
+		logs.Panic(nil, "could not initialize client cache: %v", err)
 	}
 
 	err = cache.Initialize(initial)
 	if err != nil {
-		logs.Panic(fmt.Sprintf("could not initialize client cache: %v", err))
+		logs.Panic(nil, "could not initialize client cache: %v", err)
 	}
-	logs.Info("Initialized cache for clients")
+	logs.Info(nil, "Initialized cache for clients")
 }
 
-func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
+func LoadClientInfo(c *gin.Context, clientId string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		cachedItem, found := cache.Get(clientId)
 		if found {
@@ -64,7 +64,7 @@ func LoadClientInfo(clientId string) (ClientCacheItem, bool, error) {
 		}
 	}
 
-	logs.Info(fmt.Sprintf("client not found in cache, selecting client info: %s", clientId))
+	logs.Info(c, "client not found in cache, selecting client info: %s", clientId)
 	db := framework.DB()
 	var clientDataItem []knownClientEntity
 	var devices []ClientDevice
@@ -170,7 +170,7 @@ UPDATE client_devices SET ip_location_check_error = $1 WHERE id = $2
 	return err
 }
 
-func TryFindClientOfUser(userId string) (ClientCacheItem, bool, error) {
+func TryFindClientOfUser(c *gin.Context, userId string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		allCached, err := cache.GetAllAsArray()
 		if err != nil {
@@ -183,7 +183,7 @@ func TryFindClientOfUser(userId string) (ClientCacheItem, bool, error) {
 		}
 	}
 
-	logs.Info(fmt.Sprintf("failed to find client of user in cache checkin db, user: %s", userId))
+	logs.Info(c, "failed to find client of user in cache checkin db, user: %s", userId)
 	db := framework.DB()
 	var clients []knownClientEntity
 	err := db.Select(&clients, "SELECT * FROM clients WHERE real_user_id = $1", userId)
@@ -195,10 +195,10 @@ func TryFindClientOfUser(userId string) (ClientCacheItem, bool, error) {
 		return ClientCacheItem{}, false, nil
 	}
 
-	return LoadClientInfo(clients[0].Id)
+	return LoadClientInfo(c, clients[0].Id)
 }
 
-func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) {
+func TryFindExistingClient(c *gin.Context, ip, userAgent string) (ClientCacheItem, bool, error) {
 	if cache.IsInitialized() {
 		resultChannel := make(chan ClientCacheItem)
 		go cache.GetAll(resultChannel)
@@ -218,7 +218,7 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 		return ClientCacheItem{}, false, nil
 	}
 
-	logs.Info("client cache not initialized, selecting existing client")
+	logs.Info(c, "client cache not initialized, selecting existing client")
 	db := framework.DB()
 	var devices []ClientDevice
 	err := db.Select(&devices, "SELECT * FROM client_devices WHERE ip_address=$1 AND user_agent=$2 LIMIT 1", ip, userAgent)
@@ -230,7 +230,7 @@ func TryFindExistingClient(ip, userAgent string) (ClientCacheItem, bool, error) 
 		return ClientCacheItem{}, false, nil
 	}
 
-	return LoadClientInfo(devices[0].ClientId)
+	return LoadClientInfo(c, devices[0].ClientId)
 }
 
 func GetCurrentDevice(client ClientCacheItem, ip string, agent string) (ClientDevice, bool) {
@@ -243,7 +243,7 @@ func GetCurrentDevice(client ClientCacheItem, ip string, agent string) (ClientDe
 	return ClientDevice{}, false
 }
 
-func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
+func LookupDeviceId(c *gin.Context, clientId string, ip string, agent string) (string, error) {
 	if cache.IsInitialized() {
 		client, found := cache.Get(clientId)
 		if found {
@@ -255,7 +255,7 @@ func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
 		}
 	}
 
-	logs.Info("device found in client cache, searching in DB")
+	logs.Info(c, "device found in client cache, searching in DB")
 	db := framework.DB()
 	var ids []string
 	err := db.Select(&ids, "SELECT client_devices.id FROM client_devices WHERE ip_address=$1 AND user_agent=$2 AND client_id = $3 LIMIT 1", ip, agent, clientId)
@@ -264,7 +264,7 @@ func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
 	}
 
 	if len(ids) > 1 {
-		logs.Warn(fmt.Sprintf("found more than one device for client with same data in DB: clientId:%s ip:%s agent:%s", clientId, ip, agent))
+		logs.Warn(c, "found more than one device for client with same data in DB: clientId:%s ip:%s agent:%s", clientId, ip, agent)
 	}
 	if len(ids) < 1 {
 		return "", sql.ErrNoRows
@@ -273,7 +273,7 @@ func LookupDeviceId(clientId string, ip string, agent string) (string, error) {
 	return ids[0], nil
 }
 
-func CreateNewClient(clientId string, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {
+func CreateNewClient(c *gin.Context, clientId string, realUserId string, ip string, userAgent string) (ClientCacheItem, error) {
 	db := framework.DB()
 
 	createdAt := time.Now()
@@ -309,11 +309,11 @@ func CreateNewClient(clientId string, realUserId string, ip string, userAgent st
 	}
 	cache.StoreSafeBackground(cacheItem)
 
-	logs.Info(fmt.Sprintf("created new client: agent:%s ip:%s", userAgent, ip))
+	logs.Info(c, "created new client: agent:%s ip:%s", userAgent, ip)
 	return cacheItem, nil
 }
 
-func AddDeviceToClient(clientId string, ip string, userAgent string) (ClientCacheItem, error) {
+func AddDeviceToClient(c *gin.Context, clientId string, ip string, userAgent string) (ClientCacheItem, error) {
 	db := framework.DB()
 	deviceId := uuid.NewString()
 	_, err := db.Exec("INSERT INTO client_devices (id, client_id, ip_address, user_agent) VALUES ($1, $2, $3, $4)", deviceId, clientId, ip, userAgent)
@@ -326,15 +326,15 @@ func AddDeviceToClient(clientId string, ip string, userAgent string) (ClientCach
 		return ClientCacheItem{}, err
 	}
 
-	logs.Info(fmt.Sprintf("added new device to client: client:%s agent:%s ip:%s", clientId, userAgent, ip))
-	client, found, err := LoadClientInfo(clientId)
+	logs.Info(c, "added new device to client: client:%s agent:%s ip:%s", clientId, userAgent, ip)
+	client, found, err := LoadClientInfo(c, clientId)
 	if !found && err == nil {
-		logs.Warn(fmt.Sprintf("just inserted client, but was not found: id:%s", clientId))
+		logs.Warn(c, "just inserted client, but was not found: id:%s", clientId)
 	}
 	return client, err
 }
 
-func AddUserToClient(clientId string, userId string) (ClientCacheItem, error) {
+func AddUserToClient(c *gin.Context, clientId string, userId string) (ClientCacheItem, error) {
 	db := framework.DB()
 	_, err := db.Exec("UPDATE clients SET real_user_id=$1 WHERE id=$2", userId, clientId)
 	if err != nil {
@@ -346,16 +346,16 @@ func AddUserToClient(clientId string, userId string) (ClientCacheItem, error) {
 		return ClientCacheItem{}, err
 	}
 
-	logs.Info(fmt.Sprintf("added user to clinet: user:%s client:%s", userId, clientId))
-	client, found, err := LoadClientInfo(clientId)
+	logs.Info(c, "added user to clinet: user:%s client:%s", userId, clientId)
+	client, found, err := LoadClientInfo(c, clientId)
 	if !found && err == nil {
-		logs.Warn(fmt.Sprintf("just added user to client, but client was not found: id:%s", clientId))
+		logs.Warn(c, "just added user to client, but client was not found: id:%s", clientId)
 	}
 	return client, err
 }
 
-func MarkDeviceAsValidated(txLoader framework.LoadableTx, clientId string, deviceId string) error {
-	tx, err := txLoader()
+func MarkDeviceAsValidated(c *gin.Context, clientId string, deviceId string) error {
+	tx, err := framework.GetTx(c)()
 	if err != nil {
 		return err
 	}
@@ -366,9 +366,9 @@ func MarkDeviceAsValidated(txLoader framework.LoadableTx, clientId string, devic
 	}
 
 	// update cache, needs to be like this, because LoadClientInfo ignores the current transaction
-	client, found, err := LoadClientInfo(clientId)
+	client, found, err := LoadClientInfo(c, clientId)
 	if !found && err == nil {
-		logs.Warn("updated device but client was not found, client: " + clientId)
+		logs.Warn(c, "updated device but client was not found, client: "+clientId)
 	}
 	if err != nil {
 		return err
@@ -384,7 +384,7 @@ func MarkDeviceAsValidated(txLoader framework.LoadableTx, clientId string, devic
 	return err
 }
 
-func MergeDevicesAndDelete(txLoader framework.LoadableTx, target ClientCacheItem, toMerge ClientCacheItem) (ClientCacheItem, error) {
+func MergeDevicesAndDelete(c *gin.Context, target ClientCacheItem, toMerge ClientCacheItem) (ClientCacheItem, error) {
 	// 1. find devices that are new to target
 	// 2. insert found device to target
 	// 3. if toMerge has no user, remove client and devices else keep client
@@ -407,7 +407,7 @@ func MergeDevicesAndDelete(txLoader framework.LoadableTx, target ClientCacheItem
 		}
 	}
 
-	tx, err := txLoader()
+	tx, err := framework.GetTx(c)()
 	if err != nil {
 		return ClientCacheItem{}, err
 	}
@@ -435,8 +435,7 @@ VALUES (:id, :client_id, :ip_address, :user_agent, :ip_location_check_error, :cr
 		}
 	}
 
-	logs.Info(fmt.Sprintf("merged devices of client %s into client %s (%d devices) -- updating caches",
-		toMerge.Id, target.Id, len(target.Devices)))
+	logs.Info(c, "merged devices of client %s into client %s (%d devices) -- updating caches", toMerge.Id, target.Id, len(target.Devices))
 
 	err = cache.Remove(target.Id)
 	if err != nil {

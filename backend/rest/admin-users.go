@@ -48,7 +48,7 @@ type UserDevicesDto struct {
 func getUsers(c *gin.Context) {
 	result, err := users.LoadUsers(framework.GetTx(c))
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to select all users: %v", err))
+		logs.Warn(c, "failed to select all users: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load users"})
 		return
 	}
@@ -59,7 +59,7 @@ func getUsers(c *gin.Context) {
 	}
 	userDevices, err := clients.SelectDevicesByUsers(userIds)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed to select devices of users: %v", err))
+		logs.Warn(c, "failed to select devices of users: %v", err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load users"})
 		return
 	}
@@ -69,7 +69,7 @@ func getUsers(c *gin.Context) {
 	for i, user := range result {
 		pageAccess, err := pageaccess.LoadUserPageAccess(framework.GetTx(c), user.Id)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to load user page access: %v", err))
+			logs.Warn(c, "failed to load user page access: %v", err)
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to load users"})
 			return
 		}
@@ -124,7 +124,7 @@ type editUserDto struct {
 func postUser(c *gin.Context) {
 	var dto editUserDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind user from request: %v", err))
+		logs.Info(c, "failed to bind user from request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return
 	}
@@ -134,28 +134,28 @@ func postUser(c *gin.Context) {
 		return
 	}
 
-	if users.SimilarUserExists(framework.GetTx(c), dto.UserId, dto.Mail) {
+	if users.SimilarUserExists(c, dto.UserId, dto.Mail) {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "user already exists"})
 		return
 	}
 
 	hashedPassword, salt, err := framework.SecureHashWithSalt(dto.Password)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("failed hash password: %v", err))
+		logs.Warn(c, fmt.Sprintf("failed hash password: %v", err))
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "failed to encode password"})
 		return
 	}
 
-	err = users.InsertNewUser(framework.GetTx(c), dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.MfaType, dto.AddPages)
+	err = users.InsertNewUser(c, dto.UserId, dto.Mail, hashedPassword, salt, dto.Admin, dto.Blocked, dto.MfaType, dto.AddPages)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("could not insert new user: %v -> %v", dto.Mail, err))
+		logs.Warn(c, "could not insert new user: %v -> %v", dto.Mail, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
 		return
 	}
 
-	err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
+	err = mfa.Prepare(c, dto.UserId, dto.MfaType)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("could not prepare token for new user: %v -> %v", dto.Mail, err))
+		logs.Warn(c, "could not prepare token for new user: %v -> %v", dto.Mail, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to create user"})
 		return
 	}
@@ -166,18 +166,18 @@ func postUser(c *gin.Context) {
 func putUser(c *gin.Context) {
 	var dto editUserDto
 	if err := c.ShouldBindJSON(&dto); err != nil {
-		logs.Info(fmt.Sprintf("failed to bind user from request: %v", err))
+		logs.Info(c, "failed to bind user from request: %v", err)
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "data has invalid format"})
 		return
 	}
 
-	existingUser, found := users.LoadUserById(framework.GetTx(c), dto.UserId)
+	existingUser, found := users.LoadUserById(c, dto.UserId)
 	if !found {
 		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user not found"})
 		return
 	}
 
-	if users.MailExists(framework.GetTx(c), dto.Mail, dto.UserId) {
+	if users.MailExists(c, dto.Mail, dto.UserId) {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "user with mail already exists"})
 		return
 	}
@@ -207,22 +207,22 @@ func putUser(c *gin.Context) {
 		dto.Onboard = false // if MFA Type changes, user must onboard again
 		err := mfa.ClearTokenOfUser(framework.GetTx(c), dto.UserId)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to remove token for user: %v -> %v", dto.UserId, err))
+			logs.Warn(c, "failed to remove token for user: %v -> %v", dto.UserId, err)
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to remove token for user"})
 			return
 		}
 
-		err = mfa.Prepare(framework.GetTx(c), dto.UserId, dto.MfaType)
+		err = mfa.Prepare(c, dto.UserId, dto.MfaType)
 		if err != nil {
-			logs.Warn(fmt.Sprintf("failed to prepare token for user: %v -> %v", dto.UserId, err))
+			logs.Warn(c, "failed to prepare token for user: %v -> %v", dto.UserId, err)
 			auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to prepare token for user"})
 			return
 		}
 	}
 
-	err := users.UpdateUser(framework.GetTx(c), dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.MfaType, dto.RemovePages, dto.AddPages)
+	err := users.UpdateUser(c, dto.UserId, dto.Mail, existingUser.Password, existingUser.Salt, dto.Admin, dto.Blocked, dto.Onboard, existingUser.LastLogin, dto.MfaType, dto.RemovePages, dto.AddPages)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("could not update user: %v -> %v", dto.Mail, err))
+		logs.Warn(c, "could not update user: %v -> %v", dto.Mail, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to update user"})
 		return
 	}
@@ -232,14 +232,13 @@ func putUser(c *gin.Context) {
 }
 
 func deleteUser(c *gin.Context) {
-	tx := framework.GetTx(c)
 	userId := c.Param("id")
-	user, found := users.LoadUserById(tx, userId)
+	user, found := users.LoadUserById(c, userId)
 	if !found {
 		auth.RespondWithCookie(c, http.StatusNotFound, gin.H{"message": "user not found"})
 		return
 	}
-	if user.Admin && !users.DifferentAdminExists(tx, user.Id) {
+	if user.Admin && !users.DifferentAdminExists(c, user.Id) {
 		auth.RespondWithCookie(c, http.StatusBadRequest, gin.H{"message": "can't remove last admin"})
 		return
 	}
@@ -254,9 +253,9 @@ func deleteUser(c *gin.Context) {
 		return
 	}
 
-	err := users.DeleteUser(tx, userId)
+	err := users.DeleteUser(c, userId)
 	if err != nil {
-		logs.Warn(fmt.Sprintf("could not delete user: %v -> %v", userId, err))
+		logs.Warn(c, "could not delete user: %v -> %v", userId, err)
 		auth.RespondWithCookie(c, http.StatusInternalServerError, gin.H{"message": "failed to delete user"})
 		return
 	}

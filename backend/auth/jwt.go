@@ -2,8 +2,7 @@ package auth
 
 import (
 	"errors"
-	"fmt"
-	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 	"github.com/gin-gonic/gin"
 	"github.com/golang-jwt/jwt/v5"
@@ -67,28 +66,28 @@ func (data IdentityToken) ToJwtString() (string, error) {
 // parseIdentityToken parses the string to an IdentityToken
 // fails if tokens has invalid format
 // does no app specific validation
-func parseIdentityToken(tokenString string) (IdentityToken, error) {
+func parseIdentityToken(c *gin.Context, tokenString string) (IdentityToken, error) {
 	var claims IdentityToken
 	token, err := jwt.ParseWithClaims(tokenString, &claims, func(token *jwt.Token) (interface{}, error) {
 		return getSecret(), nil
 	})
 	if err != nil {
-		logs.Warn(fmt.Sprintf("JWT could not be parsed: %v", err))
+		logs.Warn(c, "JWT could not be parsed: %v", err)
 		return IdentityToken{}, errors.New("user unauthenticated")
 	}
 	if !token.Valid {
-		logs.Warn("provided token ID is not valid!")
+		logs.Warn(c, "provided token ID is not valid!")
 		return IdentityToken{}, errors.New("user unauthenticated")
 	}
 
 	expiresClaim, err := claims.GetExpirationTime()
 	if err != nil || expiresClaim.Before(time.Now()) {
-		logs.Warn("JWT has expired or the expiration date could not be parsed")
+		logs.Warn(c, "JWT has expired or the expiration date could not be parsed")
 		return IdentityToken{}, errors.New("user unauthenticated")
 	}
 
 	if claims.IssuedAt.After(time.Now()) {
-		logs.Warn("JWT token was issued in the future")
+		logs.Warn(c, "JWT token was issued in the future")
 		return IdentityToken{}, errors.New("user unauthenticated")
 	}
 
@@ -134,17 +133,17 @@ func getIdentityToken(c *gin.Context, key string) (IdentityToken, bool) {
 }
 
 func getSecret() []byte {
-	config := framework.Config()
-	if config.JWT.Secret == "" {
-		logs.Warn("no JWT secret is provided, using default")
-		config.JWT.Secret = "dGhpcyBzaG91bGQgbm90IGJlIHVzZWQ="
+	cnf := config.Config()
+	if cnf.JWT.Secret == "" {
+		logs.Warn(nil, "no JWT secret is provided, using default")
+		cnf.JWT.Secret = "dGhpcyBzaG91bGQgbm90IGJlIHVzZWQ="
 	}
 
-	return []byte(config.JWT.Secret)
+	return []byte(cnf.JWT.Secret)
 }
 
 func getNewTokenExpirationTime() *jwt.NumericDate {
-	tokenLifetime := time.Duration(framework.Config().JWT.Lifetime)
+	tokenLifetime := time.Duration(config.Config().JWT.Lifetime)
 	if tokenLifetime <= 0 {
 		tokenLifetime = 24
 	}

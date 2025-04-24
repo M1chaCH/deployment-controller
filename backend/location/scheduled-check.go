@@ -1,18 +1,18 @@
 package location
 
 import (
-	"fmt"
 	"github.com/M1chaCH/deployment-controller/data/clients"
 	"github.com/M1chaCH/deployment-controller/framework"
+	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
 )
 
 func InitScheduledLocationCheck() {
-	logs.Info("running device location check on startup")
+	logs.Info(nil, "running device location check on startup")
 	if err := checkDevicesWithNoLocation(); err != nil { // run once initially to make sure it works at least on startup...
-		logs.Panic(fmt.Sprintf("check 'device_with_no_location' failed initially: %v", err))
+		logs.Panic(nil, "check 'device_with_no_location' failed initially: %v", err)
 	}
-	framework.RunScheduledTask("device_with_no_location", framework.Config().Location.CheckWaitTimeMinutes, checkDevicesWithNoLocation)
+	framework.RunScheduledTask("device_with_no_location", config.Config().Location.CheckWaitTimeMinutes, checkDevicesWithNoLocation)
 }
 
 func checkDevicesWithNoLocation() error {
@@ -22,17 +22,17 @@ func checkDevicesWithNoLocation() error {
 	}
 
 	if len(devicesToCheck) == 0 {
-		logs.Info("all devices have a location, nothing done")
+		logs.Info(nil, "all devices have a location, nothing done")
 		return nil
 	}
 
-	logs.Info(fmt.Sprintf("loading locations of %d devices", len(devicesToCheck)))
+	logs.Info(nil, "loading locations of %d devices", len(devicesToCheck))
 
 	for _, device := range devicesToCheck {
 		location, err := LoadLocation(device.IpAddress)
 
 		if err != nil {
-			logs.Warn(fmt.Sprintf("error loading location for ip (%s): %v", device.IpAddress, err))
+			logs.Warn(nil, "error loading location for ip (%s): %v", device.IpAddress, err)
 			err = clients.UpdateDeviceAfterLocationCheck(device.DeviceId, err.Error())
 			if err != nil {
 				return err
@@ -62,7 +62,7 @@ func checkDevicesWithNoLocation() error {
 				return err
 			}
 
-			logs.Info(fmt.Sprintf("inserted location for ip %s and device %s", device.IpAddress, device.DeviceId))
+			logs.Info(nil, "inserted location for ip %s and device %s", device.IpAddress, device.DeviceId)
 		}
 	}
 
