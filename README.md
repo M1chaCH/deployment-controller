@@ -7,7 +7,7 @@ At this point it can be tracked what every single client does on my servers. (A 
 ## features
 - [x] `n` projects behind one domain, with subdomains or locations
 - [x] optionally require login to access the project
-- [x] actually secure login (? :))
+- [x] actually secure login (? 🙃)
   - [x] SQL injection protection
   - [x] XSS protection
   - [x] secure JWT
@@ -24,6 +24,7 @@ At this point it can be tracked what every single client does on my servers. (A 
 - [x] logging, that makes performance and quality reviews easy (kibana)
 - [ ] send informative mails to the admin and the users
 - [x] (close to) completely stateless backend
+- [ ] oAuth solution to enable central user management accross all projects
 
 ## tech stack
 - nginx
