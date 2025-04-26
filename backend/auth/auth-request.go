@@ -4,6 +4,7 @@ import (
 	"github.com/M1chaCH/deployment-controller/data/pageaccess"
 	"github.com/M1chaCH/deployment-controller/framework"
 	"github.com/M1chaCH/deployment-controller/framework/logs"
+	"github.com/M1chaCH/deployment-controller/location"
 	"github.com/gin-gonic/gin"
 	"net/http"
 	"strings"
@@ -36,12 +37,28 @@ func authRequest(c *gin.Context) {
 		return
 	}
 
+	resolveAndLogData(c, token, technicalName)
 	checkTargetAccess(c, technicalName, userPageAccess.Pages)
 }
 
 type assertablePage interface {
 	GetTechnicalName() string
 	GetAccessAllowed() bool
+}
+
+func resolveAndLogData(c *gin.Context, token IdentityToken, technicalName string) {
+	loc, err := location.LoadLocation(token.OriginIp, true)
+	var longitude, latitude float32
+	if err == nil {
+		longitude = loc.Longitude
+		latitude = loc.Latitude
+	}
+
+	logs.AddApmLabels(c, logs.ApmLabels{
+		"ctl.page.technical_name":   technicalName,
+		"ctl.page.access.longitude": longitude,
+		"ctl.page.access.latitude":  latitude,
+	})
 }
 
 func checkTargetAccess[T assertablePage](c *gin.Context, target string, pages []T) {

@@ -31,6 +31,15 @@ func IdentityJwtMiddleware() gin.HandlerFunc {
 		} else {
 			c.Set(idJwtContextKey, token)
 			c.Set(updatedIdJwtContextKey, token)
+
+			logs.AddApmLabels(c, logs.ApmLabels{
+				"ctl.user.id":    token.UserId,
+				"ctl.user.login": token.LoginState,
+				"ctl.user.admin": token.Admin,
+				"ctl.client.id":  token.Issuer,
+				"ctl.tk.issued":  token.IssuedAt,
+				"ctl.tk.expires": token.ExpiresAt,
+			})
 		}
 
 		c.Next()

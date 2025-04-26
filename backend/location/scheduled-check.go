@@ -22,14 +22,14 @@ func checkDevicesWithNoLocation() error {
 	}
 
 	if len(devicesToCheck) == 0 {
-		logs.Info(nil, "all devices have a location, nothing done")
+		logs.Debug(nil, "all devices have a location, nothing done")
 		return nil
 	}
 
-	logs.Info(nil, "loading locations of %d devices", len(devicesToCheck))
+	logs.Debug(nil, "loading locations of %d devices", len(devicesToCheck))
 
 	for _, device := range devicesToCheck {
-		location, err := LoadLocation(device.IpAddress)
+		location, err := LoadLocation(device.IpAddress, false)
 
 		if err != nil {
 			logs.Warn(nil, "error loading location for ip (%s): %v", device.IpAddress, err)
@@ -62,7 +62,7 @@ func checkDevicesWithNoLocation() error {
 				return err
 			}
 
-			logs.Info(nil, "inserted location for ip %s and device %s", device.IpAddress, device.DeviceId)
+			logs.Debug(nil, "inserted location for ip %s and device %s", device.IpAddress, device.DeviceId)
 		}
 	}
 

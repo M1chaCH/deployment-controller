@@ -1,0 +1,114 @@
+{
+  "date_detection": false,
+  "properties": {
+    "file.path": {
+      "type": "keyword"
+    },
+    "labels.ctl_tk_expires": {
+      "type": "date"
+    },
+    "labels.ctl_user_login": {
+      "type": "keyword"
+    },
+    "content": {
+      "type": "binary"
+    },
+    "labels.ctl_user_admin": {
+      "type": "boolean"
+    },
+    "transaction.id": {
+      "eager_global_ordinals": false,
+      "norms": false,
+      "index": true,
+      "store": false,
+      "type": "keyword",
+      "split_queries_on_whitespace": false,
+      "index_options": "docs",
+      "doc_values": true
+    },
+    "trace.id": {
+      "eager_global_ordinals": false,
+      "norms": false,
+      "index": true,
+      "store": false,
+      "type": "keyword",
+      "split_queries_on_whitespace": false,
+      "index_options": "docs",
+      "doc_values": true
+    },
+    "log.file.device_id": {
+      "type": "integer"
+    },
+    "log.level": {
+      "type": "keyword"
+    },
+    "fleet_id": {
+      "type": "keyword"
+    },
+    "log.origin.file.line": {
+      "type": "integer"
+    },
+    "service.name": {
+      "type": "keyword"
+    },
+    "content_sha256": {
+      "type": "keyword"
+    },
+    "created": {
+      "type": "date"
+    },
+    "data_stream.namespace": {
+      "type": "constant_keyword"
+    },
+    "service.serviceEnvironment": {
+      "eager_global_ordinals": false,
+      "norms": false,
+      "index": true,
+      "store": false,
+      "type": "keyword",
+      "split_queries_on_whitespace": false,
+      "index_options": "docs",
+      "doc_values": true
+    },
+    "data_stream.type": {
+      "type": "constant_keyword",
+      "value": "logs"
+    },
+    "@timestamp": {
+      "type": "date"
+    },
+    "log.origin.file.name": {
+      "type": "text"
+    },
+    "log.origin.function": {
+      "type": "text"
+    },
+    "labels.ctl_client_id": {
+      "type": "keyword"
+    },
+    "service.version": {
+      "type": "keyword"
+    },
+    "labels.ctl_page_technical_name": {
+      "type": "keyword"
+    },
+    "labels.ctl_tk_issued": {
+      "type": "date"
+    },
+    "log.file.inode": {
+      "type": "integer"
+    },
+    "labels.ctl_user_id": {
+      "type": "keyword"
+    },
+    "data_stream.dataset": {
+      "type": "constant_keyword"
+    },
+    "log.file.path": {
+      "type": "text"
+    },
+    "log.file.fingerprint": {
+      "type": "keyword"
+    }
+  }
+}

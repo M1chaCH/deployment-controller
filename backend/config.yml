@@ -35,7 +35,7 @@ location:
   account:
   license:
   cache_expire_hours: 48
-  check_wait_time_minutes: 10
+  check_wait_time_minutes: 2
   local_ip:
 log:
   level: 5 # logrus debug

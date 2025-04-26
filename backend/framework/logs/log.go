@@ -94,3 +94,12 @@ func getApmData(c *gin.Context) logrus.Fields {
 
 	return fields
 }
+
+type ApmLabels map[string]interface{}
+
+func AddApmLabels(c *gin.Context, labels map[string]interface{}) {
+	apmTx := apm.TransactionFromContext(c.Request.Context())
+	for k, v := range labels {
+		apmTx.Context.SetLabel(k, v)
+	}
+}

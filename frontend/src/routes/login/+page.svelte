@@ -138,9 +138,11 @@
                         <input id="password" type="password" bind:value={password} on:keydown={handleInputKeydown}/>
                     </div>
                 {:else}
-                    <button style="margin: 8px;" class="carbon-button primary" on:click={() => sendMfaMail()} disabled={sendingMail}>Send E-Mail again</button>
-                    {#if sendMfaMailFailed}
-                        <MiniNotification message="Failed to send MFA Token via mail." on:close={() => sendMfaMailFailed = false} />
+                    {#if mfaType === 'mfa-mailtotp'}
+                        <button style="margin: 8px;" class="carbon-button primary" on:click={() => sendMfaMail()} disabled={sendingMail}>Send E-Mail again</button>
+                        {#if sendMfaMailFailed}
+                            <MiniNotification message="Failed to send MFA Token via mail." on:close={() => sendMfaMailFailed = false} />
+                        {/if}
                     {/if}
 
                     <TokenInput on:input={e => token = e.detail.value}/>

@@ -208,6 +208,7 @@
                         <div slot="content">
                             <p><span class="subtext">Admin:</span> {user.admin}</p>
                             <p><span class="subtext">Onboard:</span> {user.onboard}</p>
+                            <p><span class="subtext">Mfa Type:</span> {user.mfaType}</p>
                             <p><span class="subtext">Blocked:</span> {user.blocked}</p>
                             <p><span class="subtext">Last login:</span> {moment(user.lastLogin).format("DD.MM.yyyy HH:mm:ss")}</p>
                             <p><i>User was created at: {moment(user.createdAt).format("DD.MM.yyyy HH:mm:ss")}</i></p>

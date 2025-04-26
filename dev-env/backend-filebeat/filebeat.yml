@@ -10,10 +10,6 @@ filebeat.inputs:
 processors:
   - add_host_metadata: ~
   - add_docker_metadata: ~
-  - add_fields:
-     target: service
-     fields:
-       name: dev-deployment-controller
 
 setup.template.name: logs-elastic_agent.filebeat
 setup.template.pattern: logs-elastic_agent.filebeat-*

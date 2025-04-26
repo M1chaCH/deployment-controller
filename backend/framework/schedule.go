@@ -20,7 +20,7 @@ func run(taskName string, sleepMinutes int, task func() error) {
 	for {
 		time.Sleep(sleepDuration)
 
-		logs.Info(nil, "SCHEDULE: running task: "+taskName)
+		logs.Debug(nil, "SCHEDULE: running task: "+taskName)
 		err := task()
 
 		if err != nil {
@@ -38,7 +38,7 @@ func run(taskName string, sleepMinutes int, task func() error) {
 		}
 
 		if err == nil {
-			logs.Info(nil, "SCHEDULE: successfully ran task: %s, next run in %d minutes", taskName, sleepConfig)
+			logs.Debug(nil, "SCHEDULE: successfully ran task: %s, next run in %d minutes", taskName, sleepConfig)
 		}
 	}
 }

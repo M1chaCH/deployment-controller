@@ -54,13 +54,13 @@ func InitCache() {
 
 var privateIpRegexp = regexp.MustCompile(`(^192\.168\..*$)|(^172\.16\..*$)|(^10\..*$)`)
 
-func LoadLocation(ip string) (CacheItem, error) {
+func LoadLocation(ip string, onlyCache bool) (CacheItem, error) {
 	if len(ip) < 7 {
 		return CacheItem{}, errors.New("ip invalid, too short")
 	}
 
-	// 172.18.0.1 is a docker ip found during development
-	if privateIpRegexp.MatchString(ip) || strings.ToLower(ip) == "localhost" || ip == "127.0.0.1" || ip == "172.18.0.1" {
+	// 172.18.0.1 & 172.31.0.1 is a docker ip found during development
+	if privateIpRegexp.MatchString(ip) || strings.ToLower(ip) == "localhost" || ip == "127.0.0.1" || ip == "172.18.0.1" || ip == "172.31.0.1" {
 		ip = config.Config().Location.LocalIp
 	}
 
@@ -69,6 +69,10 @@ func LoadLocation(ip string) (CacheItem, error) {
 		if ok {
 			return item, nil
 		}
+	}
+
+	if onlyCache {
+		return CacheItem{}, errors.New("ip not found in cache")
 	}
 
 	logs.Info(nil, "ip not found in cache, checking geoip: "+ip)
