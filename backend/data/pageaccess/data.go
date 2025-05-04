@@ -27,8 +27,8 @@ select p.id as page_id, u.id as user_id, p.technical_name, p.private_page,
            ELSE FALSE
            END AS has_access
 from users as u
-    left join public.user_page up on u.id = up.user_id
     full join pages as p on true
+    left join public.user_page up on p.id = up.page_id and u.id = up.user_id
 `)
 	if err != nil {
 		logs.Panic(nil, "failed to initialize pageaccess cache: %v", err)

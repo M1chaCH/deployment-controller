@@ -45,7 +45,11 @@ func LoadUserByMail(c *gin.Context, mail string) (UserEntity, bool) {
 }
 
 func LoadUserById(c *gin.Context, id string) (UserEntity, bool) {
-	tx, err := framework.GetTx(c)()
+	return LoadUserByIdWithTx(c, framework.GetTx(c), id)
+}
+
+func LoadUserByIdWithTx(c *gin.Context, loadableTx framework.LoadableTx, id string) (UserEntity, bool) {
+	tx, err := loadableTx()
 	if err != nil {
 		logs.Warn(c, "failed to check db: %v", err)
 		return UserEntity{}, false

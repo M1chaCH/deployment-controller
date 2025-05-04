@@ -20,7 +20,7 @@ create table pages
     technical_name varchar(255) not null unique,
     url         varchar(255) not null,
     title       varchar(40) not null,
-    description varchar(355) not null,
+    description varchar(1000) not null,
     private_page boolean not null default true
 );
 
@@ -88,6 +88,7 @@ create table user_totp
 	secret      varchar(255) not null unique,
 	account_name varchar(255) not null unique,
 	image bytea not null,
+    url varchar(500) not null unique,
     validated   boolean not null default false,
     created_at timestamptz not null default current_timestamp,
     validated_at timestamptz null,

@@ -61,7 +61,7 @@ func postLogin(c *gin.Context) {
 	}
 
 	if user.Blocked {
-		logs.Info(c, "blocked user tryed to login: %s", user.Id)
+		logs.Info(c, "blocked user tried to login: %s", user.Id)
 		auth.RespondWithCookie(c, http.StatusUnauthorized, gin.H{"message": "login failed"})
 		return
 	}

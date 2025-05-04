@@ -4,6 +4,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"go.elastic.co/apm/v2"
 	"os"
+	"path/filepath"
 
 	"github.com/M1chaCH/deployment-controller/framework/config"
 	"github.com/sirupsen/logrus"
@@ -40,6 +41,12 @@ func InitLogging() {
 	}
 
 	if cnf.Log.FileName != "" {
+		dir := filepath.Dir(cnf.Log.FileName)
+		err := os.MkdirAll(dir, 0755)
+		if err != nil {
+			panic("could not create log directory: " + err.Error() + "")
+		}
+
 		logFile, err := os.OpenFile(cnf.Log.FileName, os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0666)
 		if err != nil {
 			panic("could not setup logger at " + cnf.Log.FileName + ": " + err.Error() + "")

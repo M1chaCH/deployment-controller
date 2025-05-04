@@ -17,7 +17,7 @@ func Prepare(c *gin.Context, userId string, mfaType string) error {
 	return PrepareOptionalLogging(c, framework.GetTx(c), userId, mfaType)
 }
 func PrepareOptionalLogging(c *gin.Context, loadableTx framework.LoadableTx, userId string, mfaType string) error {
-	user, found := users.LoadUserById(c, userId)
+	user, found := users.LoadUserByIdWithTx(c, loadableTx, userId)
 	if !found {
 		return errors.New("unknown user")
 	}

@@ -10,7 +10,7 @@ db:
 jwt:
   secret: ZG9uJ3QgZG8gdGhpcw==
   lifetime: 168 #hous
-  domain: michu-tech-dev.net
+  domain: localhost
 root:
   mail: test@mail.com
   password: test
@@ -20,16 +20,23 @@ mail:
   max_count: 5
   count_duration: 10
   smtp:
-    host: smtp-relay.mail.com
-    port: 000
-    user: user@mail.com
-    password: password
+    host:
+    port:
+    user:
+    password:
+  max_message_length: 1000
 cors:
-  origins: https://host.michu-tech.com,http://host.michu-tech-dev.net
+  origins: https://host.michu-tech.com,http://host.michu-tech-dev.net,http://localhost
+totp:
+  totp_lifetime: 30 # seconds
+  slow_totp_lifetime: 300 # seconds
 location:
-  host: location.more.info
-  account: user
-  license: password
+  host:
+  account:
+  license:
   cache_expire_hours: 48
-  check_wait_time_minutes: 10
-  local_ip: my-ip
+  check_wait_time_minutes: 2
+  local_ip:
+log:
+  level: 5 # logrus debug
+  file_name: /var/log/deploy-ctl/backend.log
