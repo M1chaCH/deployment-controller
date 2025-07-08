@@ -10,5 +10,20 @@
 <body>
     <h1>TeachU</h1>
     <p>This is the public TeachU App.</p>
+
+    <button id="send">Send</button>
+
+    <script>
+        const button = document.getElementById("send");
+        button.addEventListener("click", () => {
+            console.log("clicked")
+            fetch("http://host.backend.michu-tech-dev.net/post-ping", {
+                method: "POST",
+                headers: {
+                    "Access-Control-Allow-Origin": "http://teachu.michu-tech-dev.net"
+                }
+            })
+        })
+    </script>
 </body>
 </html>

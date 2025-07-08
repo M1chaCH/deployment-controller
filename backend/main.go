@@ -81,6 +81,7 @@ func main() {
 	engine := gin.New()
 	engine.Use(apmgin.Middleware(engine))
 	engine.Use(cors.New(cors.Config{
+		AllowWildcard:    true,
 		AllowOrigins:     strings.Split(cnf.Cors.Origins, ","),
 		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
 		AllowHeaders:     []string{"Origin", "Content-Length", "Content-Type", "Cookie", "Set-Cookie"},
