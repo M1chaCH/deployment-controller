@@ -231,6 +231,7 @@
         <h1 id="error-title">500 - Server Error</h1>
         <p id="nginx-text">- nginx -</p>
         <p id="error-description">Unfortunately there has been an issue with the server. But don't worry, we have already been notified, and we will resolve this issue as soon as possible.</p>
+        <p id="origin" style="margin-top: 12px;"></p>
     </section>
 </main>
 <div class="footer-container">
@@ -263,6 +264,11 @@
 
     document.getElementById("error-title").textContent = httpErrorCode + " " + httpErrorText;
     document.getElementById("error-description").textContent = resolveErrorText(httpErrorCode);
+
+    const originUrlContent = urlParams.get("origin")
+    if(originUrlContent) {
+        document.getElementById("origin").textContent = `Origin: ${originUrlContent}`;
+    }
 
     updateSvg(httpErrorCode);
     updateTheme();
